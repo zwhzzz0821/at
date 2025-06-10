@@ -28,7 +28,14 @@ Status ReporterAgent::ReportLine(int secs_elapsed,
   auto s = report_file_->Append(report);
   return s;
 }
-
+const TetrisMetrics& ReporterAgent::GetMetrics() const {
+  assert(false);
+  return current_metrics_;
+}
+void ReporterAgent::UpdateMetric(int secs_elapsed) {
+  assert(false);
+  // No metrics to update in this reporter
+}
 void ReporterAgentWithTuning::DetectChangesPoints(int sec_elapsed) {
   std::vector<ChangePoint> change_points;
   if (applying_changes) {

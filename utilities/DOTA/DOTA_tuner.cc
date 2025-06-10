@@ -2,6 +2,7 @@
 // Created by jinghuan on 8/24/21.
 //
 
+#include "rocksdb/utilities/DOTA_tuner.h"
 #include <vector>
 
 #include "rocksdb/utilities/report_agent.h"

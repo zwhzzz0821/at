@@ -2052,21 +2052,6 @@ struct DBWithColumnFamilies {
   }
 };
 
-
-enum OperationType : unsigned char {
-  kRead = 0,
-  kWrite,
-  kDelete,
-  kSeek,
-  kMerge,
-  kUpdate,
-  kCompress,
-  kUncompress,
-  kCrc,
-  kHash,
-  kOthers
-};
-
 static std::unordered_map<OperationType, std::string, std::hash<unsigned char>>
                           OperationTypeString = {
   {kRead, "read"},
@@ -2109,6 +2094,7 @@ class Stats {
 
   void SetReporterAgent(ReporterAgent* reporter_agent) {
     reporter_agent_ = reporter_agent;
+    reporter_agent_->SetHist(&hist_);
   }
 
   void Start(int id) {

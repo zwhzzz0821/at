@@ -4,7 +4,9 @@
 
 #ifndef ROCKSDB_REPORTER_H
 #define ROCKSDB_REPORTER_H
+#include <fcntl.h>
 #include <atomic>
+#include <cassert>
 #include <condition_variable>
 #include <cstddef>
 #include <iostream>
@@ -13,6 +15,8 @@
 #include <string>
 
 #include "db/db_impl/db_impl.h"
+#include "rocksdb/advanced_options.h"
+#include "rocksdb/thread_status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
 namespace ROCKSDB_NAMESPACE {
 
@@ -27,10 +31,56 @@ class ReporterWithMoreDetails;
 class ReporterAgentWithTuning;
 class ReporterAgentWithSILK;
 
+enum BenchType : int  {
+  zipfian = 0,
+  uniform = 1
+};
+
+enum BenchSeqType : int  {
+  seq = 0,
+  random = 1
+};
+
+struct TetrisMetrics {
+  double throughput_;  // MB/s
+  double p99_read_latency_; // ms
+  double p999_read_latency_;
+  double p99_write_latency_; // ms
+  double p999_write_latency_;
+  double write_amplification_;
+  double read_write_ratio_;
+  double io_intensity_;
+  BenchSeqType seq_random_;
+  BenchType zipfian_uniform_;
+  double key_value_size_distribution_;
+  double cpu_usage_; // %
+  double mem_usage_; // MB
+  double io_bandwidth_; // MB/s
+  uint64_t memtable_size_; // MB
+  uint64_t bloom_filter_size_; // MB
+};
+
+enum OperationType : unsigned char {
+  kRead = 0,
+  kWrite,
+  kDelete,
+  kSeek,
+  kMerge,
+  kUpdate,
+  kCompress,
+  kUncompress,
+  kCrc,
+  kHash,
+  kOthers
+};
+
+typedef std::unordered_map<OperationType, std::shared_ptr<HistogramImpl>,
+std::hash<unsigned char>>* HistogramMapPtr;
+
 class ReporterAgent {
  private:
   std::string header_string_;
-
+  TetrisMetrics current_metrics_; // no use in this reporter
  public:
   static std::string Header() { return "secs_elapsed,interval_qps"; }
 
@@ -67,10 +117,15 @@ class ReporterAgent {
   }
 
   virtual void InsertNewTuningPoints(ChangePoint point);
-
+ public:
+  void SetHist(HistogramMapPtr hist) {
+    hist_ = hist;
+  }
  protected:
   virtual void DetectAndTuning(int secs_elapsed);
   virtual Status ReportLine(int secs_elapsed, int total_ops_done_snapshot);
+  virtual void UpdateMetric(int secs_elapsed);
+  virtual const TetrisMetrics& GetMetrics() const;
   Env* env_;
   std::unique_ptr<WritableFile> report_file_;
   std::atomic<int64_t> total_ops_done_;
@@ -80,6 +135,7 @@ class ReporterAgent {
   std::mutex mutex_;
   // will notify on stop
   std::condition_variable stop_cv_;
+  HistogramMapPtr hist_;
   bool stop_;
   uint64_t time_started;
   void SleepAndReport() {
@@ -126,12 +182,20 @@ class ReporterAgentWithSILK : public ReporterAgent {
   int FLAGS_value_size = 1000;
   int FLAGS_SILK_bandwidth_limitation = 350;
   DBImpl* running_db_;
-
+  TetrisMetrics current_metrics_; // no use in this reporter
  public:
   ReporterAgentWithSILK(DBImpl* running_db, Env* env, const std::string& fname,
                         uint64_t report_interval_secs, int32_t FLAGS_value_size,
                         int32_t bandwidth_limitation);
   Status ReportLine(int secs_elapsed, int total_ops_done_snapshot) override;
+  const TetrisMetrics& GetMetrics() const override {
+    assert(false);
+    return current_metrics_;
+  }
+  void UpdateMetric(int secs_elapsed) override {
+    assert(false);
+    // No metrics to update in this reporter
+  }
 };
 
 class ReporterAgentWithTuning : public ReporterAgent {
@@ -153,7 +217,7 @@ class ReporterAgentWithTuning : public ReporterAgent {
   std::map<std::string, int> baseline_map;
   const int thread_num_upper_bound = 12;
   const int thread_num_lower_bound = 2;
-
+  TetrisMetrics current_metrics_; // no use in this reporter
  public:
   const static unsigned long history_lsm_shape =
       10;  // Recorded history lsm shape, here we record 10 secs
@@ -231,7 +295,7 @@ class ReporterWithMoreDetails : public ReporterAgent {
     return ReporterAgent::Header() + ",immutables" + ",total_mem_size" +
            ",l0_files" + ",all_sst_size" + ",live_data_size" + ",pending_bytes";
   }
-
+  TetrisMetrics current_metrics_; // no use in this reporter
  public:
   ReporterWithMoreDetails(DBImpl* running_db, Env* env,
                           const std::string& fname,
@@ -282,7 +346,136 @@ class ReporterWithMoreDetails : public ReporterAgent {
     auto s = report_file_->Append(report);
     return s;
   }
+
+  const TetrisMetrics& GetMetrics() const override {
+    assert(false); // no use
+    return current_metrics_;
+  }
+
+  void UpdateMetric(int secs_elapsed) override {
+    assert(false); // no use
+  }
 };
+
+class ReporterTetris : public ReporterAgent {
+ private:
+  DBImpl* db_ptr;
+  static std::string Tetris_header() {
+    return ReporterAgent::Header() + ",throughput" + ",P99 latency" +
+    ",P99.9 latency" + ",write amplification" + ",read/write ratio" +
+           ",IO intensity" + ",Seq/Random" + ",Zipfian/uniform" +
+           ",key-value size distribution" + ",CPU usage" + ",MEM usage"
+           + ",IO bandwidth" + ",memtable size" + ",bloom filter size";
+  }
+  TetrisMetrics current_metrics_;
+  Options current_opt;
+  Version* version;
+  ColumnFamilyData* cfd;
+  VersionStorageInfo* vfs;
+  
+  void UpdateSystemInfo() {
+    current_opt = db_ptr->GetOptions();
+    version = db_ptr->GetVersionSet()
+                  ->GetColumnFamilySet()
+                  ->GetDefault()
+                  ->current();
+    cfd = version->cfd();
+    vfs = version->storage_info();
+  }
+
+  double GetReadLantency(double percentile = 0.5) {
+    OperationType op_type = kRead;
+    auto hist = hist_->find(op_type);
+    if (hist == hist_->end()) {
+      std::cout << "No histogram for read operation" << std::endl;
+      return 0.0;
+    }
+    auto p99 = hist->second->Percentile(percentile);
+    if (p99 < 0) {
+      std::cout << "No p99 latency for read operation" << std::endl;
+      return 0.0;
+    }
+    return p99 / 1000.0; // convert to ms
+  }
+  double GetWriteLantency(double percentile = 0.5) {
+    OperationType op_type = kWrite;
+    auto hist = hist_->find(op_type);
+    if (hist == hist_->end()) {
+      std::cout << "No histogram for write operation" << std::endl;
+      return 0.0;
+    }
+    auto p99 = hist->second->Percentile(percentile);
+    if (p99 < 0) {
+      std::cout << "No p99 latency for write operation" << std::endl;
+      return 0.0;
+    }
+    return p99 / 1000.0; // convert to ms
+  }
+  double GetThroughtput(int secs_elapsed,
+                        int total_ops_done_snapshot) {
+    if (secs_elapsed == 0) {
+      return 0.0;
+    }
+    return static_cast<double>(total_ops_done_snapshot - last_report_) /
+           secs_elapsed; // ops/sec
+  }
+  BenchSeqType GetSeqRandomType() {
+    return current_metrics_.seq_random_;
+  }
+  BenchType GetZipfianUniformType() {
+    return current_metrics_.zipfian_uniform_;
+  }
+ public:
+  ReporterTetris(DBImpl* running_db, Env* env, const std::string& fname,
+                 uint64_t report_interval_secs, BenchSeqType seq_random_type, 
+                 BenchType zipfian_uniform_type)
+      : ReporterAgent(env, fname, report_interval_secs, Tetris_header()) {
+    current_metrics_.zipfian_uniform_ = zipfian_uniform_type;
+    current_metrics_.seq_random_ = seq_random_type;
+    if (running_db == nullptr) {
+      std::cout << "Missing parameter db_ to record more details" << std::endl;
+      abort();
+
+    } else {
+      db_ptr = reinterpret_cast<DBImpl*>(running_db);
+    }
+  }
+
+  Status ReportLine(int secs_elapsed, int total_ops_done_snapshot) override;
+
+  const TetrisMetrics& GetMetrics() const override {
+    return current_metrics_;
+  }
+
+  void UpdateMetric(int secs_elapsed) override {
+    UpdateSystemInfo();
+    TetrisMetrics metrics;
+    // throughput
+    metrics.throughput_ = GetThroughtput(secs_elapsed, total_ops_done_.load());
+    // P99 latency
+    metrics.p99_read_latency_ = GetReadLantency(0.99);
+    metrics.p99_write_latency_ = GetWriteLantency(0.99);
+    // P99.9 latency
+    metrics.p999_read_latency_ = GetReadLantency(0.999);
+    metrics.p999_write_latency_ = GetWriteLantency(0.999);
+    // write amplification
+    
+    // read/write ratio 从hist里获取
+    // IO intensity 
+    // Seq/Random 
+    metrics.seq_random_ = GetSeqRandomType();
+    // Zipfian/uniform
+    metrics.zipfian_uniform_ = GetZipfianUniformType();
+    // key-value size distribution
+    // CPU usage 从proc中获取
+    // MEM usage 从proc中获取
+    // IO bandwidth 
+    // memtable size getProperty
+    // bloom filter size
+    current_metrics_ = metrics;
+  }
+};
+
 
 };  // namespace ROCKSDB_NAMESPACE
 
