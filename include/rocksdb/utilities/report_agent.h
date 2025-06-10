@@ -4,20 +4,13 @@
 
 #ifndef ROCKSDB_REPORTER_H
 #define ROCKSDB_REPORTER_H
-#include <algorithm>
 #include <atomic>
-#include <cinttypes>
 #include <condition_variable>
 #include <cstddef>
 #include <iostream>
-#include <iterator>
 #include <memory>
 #include <mutex>
-#include <queue>
-#include <regex>
 #include <string>
-#include <thread>
-#include <unordered_map>
 
 #include "db/db_impl/db_impl.h"
 #include "rocksdb/utilities/DOTA_tuner.h"

@@ -6,10 +6,9 @@
 
 #pragma once
 
-#include <sstream>
 #include <string>
-#include <unordered_map>
 #include <vector>
+#include <cstdint>
 
 #include "rocksdb/rocksdb_namespace.h"
 

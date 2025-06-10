@@ -851,6 +851,8 @@ set(SOURCES
         utilities/compaction_filters/remove_emptyvalue_compactionfilter.cc
         utilities/counted_fs.cc
         utilities/debug.cc
+        utilities/DOTA/report_agent.cc
+        utilities/DOTA/DOTA_tuner.cc
         utilities/env_mirror.cc
         utilities/env_timed.cc
         utilities/fault_injection_env.cc
@@ -899,7 +901,13 @@ set(SOURCES
         utilities/ttl/db_ttl_impl.cc
         utilities/wal_filter.cc
         utilities/write_batch_with_index/write_batch_with_index.cc
-        utilities/write_batch_with_index/write_batch_with_index_internal.cc)
+        utilities/write_batch_with_index/write_batch_with_index_internal.cc
+        ycsbcore/acknowledged_counter_generator.cc                    		
+        ycsbcore/basic_db.cc                                          		
+        ycsbcore/core_workload.cc                                    		 	
+        ycsbcore/db_factory.cc                                        		
+        ycsbcore/measurements.cc                                      		
+        ycsbcore/ycsbc.cc)          
 
 list(APPEND SOURCES
   utilities/transactions/lock/range/range_tree/lib/locktree/concurrent_tree.cc

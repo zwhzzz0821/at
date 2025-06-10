@@ -15,7 +15,6 @@
 #include <cstdio>
 #include <list>
 #include <map>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -24,7 +23,6 @@
 #include "db/blob/blob_file_cache.h"
 #include "db/blob/blob_file_reader.h"
 #include "db/blob/blob_index.h"
-#include "db/blob/blob_log_format.h"
 #include "db/blob/blob_source.h"
 #include "db/compaction/compaction.h"
 #include "db/compaction/file_pri.h"
@@ -50,7 +48,6 @@
 #include "logging/logging.h"
 #include "monitoring/file_read_sample.h"
 #include "monitoring/perf_context_imp.h"
-#include "monitoring/persistent_stats_history.h"
 #include "options/options_helper.h"
 #include "rocksdb/env.h"
 #include "rocksdb/merge_operator.h"
@@ -67,7 +64,6 @@
 #include "table/unique_id_impl.h"
 #include "test_util/sync_point.h"
 #include "util/cast_util.h"
-#include "util/coding.h"
 #include "util/coro_utils.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
@@ -3417,12 +3413,12 @@ void VersionStorageInfo::SetFinalized() {
     assert(MaxBytesForLevel(level) >= max_bytes_prev_level);
     max_bytes_prev_level = MaxBytesForLevel(level);
   }
-  int num_empty_non_l0_level = 0;
+  // int num_empty_non_l0_level = 0;
   for (int level = 0; level < num_levels(); level++) {
     assert(LevelFiles(level).size() == 0 ||
            LevelFiles(level).size() == LevelFilesBrief(level).num_files);
     if (level > 0 && NumLevelBytes(level) > 0) {
-      num_empty_non_l0_level++;
+      // num_empty_non_l0_level++;
     }
     if (LevelFiles(level).size() > 0) {
       assert(level < num_non_empty_levels());

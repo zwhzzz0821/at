@@ -28,11 +28,9 @@
 #endif
 #include <atomic>
 #include <cinttypes>
-#include <condition_variable>
 #include <cstddef>
 #include <iostream>
 #include <memory>
-#include <mutex>
 #include <queue>
 #include <thread>
 #include <unordered_map>
@@ -5009,7 +5007,7 @@ class Benchmark {
       Status op_status;
       int read_count = 0;
       int found_count = 0;
-      int blind_updates = 0;
+      // int blind_updates = 0;
       while (!duration.Done(1)) {
         if (duration.GetStage() != stage) {
           stage = duration.GetStage();
@@ -5062,7 +5060,7 @@ class Benchmark {
             op_status = db_.db->Get(r_op, key, &data);
             read_count++;
             if (op_status.IsNotFound()) {
-              blind_updates++;
+              // blind_updates++;
             }
             Slice val = gen.Generate();
             op_status = db_.db->Put(w_op, key, val);
@@ -7624,19 +7622,19 @@ const double bandwidth_in_one_hour[3600] = {
 
     fprintf(stderr, "num reads to do %" PRIu64 "\n", reads_);
     Duration duration(FLAGS_duration, reads_);
-    uint64_t num_seek_to_first = 0;
-    uint64_t num_next = 0;
+    // uint64_t num_seek_to_first = 0;
+    // uint64_t num_next = 0;
     while (!duration.Done(1)) {
       if (!iter->Valid()) {
         iter->SeekToFirst();
-        num_seek_to_first++;
+        // num_seek_to_first++;
       } else if (!iter->status().ok()) {
         fprintf(stderr, "Iterator error: %s\n",
                 iter->status().ToString().c_str());
         abort();
       } else {
         iter->Next();
-        num_next++;
+        // num_next++;
       }
 
       thread->stats.FinishedOps(&db_, db_.db, 1, kSeek);

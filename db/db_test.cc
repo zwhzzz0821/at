@@ -37,7 +37,6 @@
 #include "env/mock_env.h"
 #include "file/filename.h"
 #include "monitoring/thread_status_util.h"
-#include "port/port.h"
 #include "port/stack_trace.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/compaction_filter.h"
@@ -47,7 +46,6 @@
 #include "rocksdb/experimental.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
-#include "rocksdb/perf_context.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/snapshot.h"
@@ -56,17 +54,14 @@
 #include "rocksdb/thread_status.h"
 #include "rocksdb/types.h"
 #include "rocksdb/utilities/checkpoint.h"
-#include "rocksdb/utilities/optimistic_transaction_db.h"
 #include "rocksdb/utilities/write_batch_with_index.h"
 #include "table/mock_table.h"
-#include "table/scoped_arena_iterator.h"
 #include "test_util/sync_point.h"
 #include "test_util/testharness.h"
 #include "test_util/testutil.h"
 #include "util/compression.h"
 #include "util/mutexlock.h"
 #include "util/random.h"
-#include "util/rate_limiter.h"
 #include "util/string_util.h"
 #include "utilities/merge_operators.h"
 
@@ -3330,10 +3325,10 @@ static bool CompareIterators(int step, DB* model, DB* db,
   options.snapshot = db_snap;
   Iterator* dbiter = db->NewIterator(options);
   bool ok = true;
-  int count = 0;
+  // int count = 0;
   for (miter->SeekToFirst(), dbiter->SeekToFirst();
        ok && miter->Valid() && dbiter->Valid(); miter->Next(), dbiter->Next()) {
-    count++;
+    // count++;
     if (miter->key().compare(dbiter->key()) != 0) {
       fprintf(stderr, "step %d: Key mismatch: '%s' vs. '%s'\n", step,
               EscapeString(miter->key()).c_str(),
@@ -4063,7 +4058,7 @@ TEST_F(DBTest, DISABLED_RateLimitingTest) {
   // micros)
   ASSERT_GT(rate_limiter_drains, 0);
   ASSERT_LE(rate_limiter_drains, elapsed / 100000 + 1);
-  double ratio = env_->bytes_written_ * 1000000 / elapsed / raw_rate;
+  double ratio = static_cast<double>(env_->bytes_written_) * 1000000 / elapsed / raw_rate;
   fprintf(stderr, "write rate ratio = %.2lf, expected 0.7\n", ratio);
   ASSERT_TRUE(ratio < 0.8);
 
@@ -4088,7 +4083,7 @@ TEST_F(DBTest, DISABLED_RateLimitingTest) {
   // micros)
   ASSERT_GT(rate_limiter_drains, elapsed / 100000 / 2);
   ASSERT_LE(rate_limiter_drains, elapsed / 100000 + 1);
-  ratio = env_->bytes_written_ * 1000000 / elapsed / raw_rate;
+  ratio = static_cast<double>(env_->bytes_written_) * 1000000 / elapsed / raw_rate;
   fprintf(stderr, "write rate ratio = %.2lf, expected 0.5\n", ratio);
   ASSERT_LT(ratio, 0.6);
 }

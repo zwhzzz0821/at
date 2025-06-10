@@ -4,8 +4,11 @@
 
 #ifndef ROCKSDB_DOTA_TUNER_H
 #define ROCKSDB_DOTA_TUNER_H
+#include "db/db_impl/db_impl.h"
+#include "db/version_set.h"
 #pragma once
 #include <iostream>
+#include <options/cf_options.h>
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -293,14 +296,14 @@ class FEAT_Tuner : public DOTA_Tuner {
   SystemScores current_score_;
   SystemScores head_score_;
   std::deque<TuningOP> recent_ops;
-  Stage current_stage;
-  double bandwidth_congestion_threshold = 0.7;
-  double slow_down_threshold = 0.75;
-  double RO_threshold = 0.8;
-  double LO_threshold = 0.7;
-  double MO_threshold = 0.5;
-  double batch_changing_frequency = 0.7;
-  int congestion_threads = min_thread;
+  [[maybe_unused]]Stage current_stage;
+  [[maybe_unused]]double bandwidth_congestion_threshold = 0.7;
+  [[maybe_unused]]double slow_down_threshold = 0.75;
+  [[maybe_unused]]double RO_threshold = 0.8;
+  [[maybe_unused]]double LO_threshold = 0.7;
+  [[maybe_unused]]double MO_threshold = 0.5;
+  [[maybe_unused]]double batch_changing_frequency = 0.7;
+  [[maybe_unused]]int congestion_threads = min_thread;
   //  int double_ratio = 4;
   SystemScores normalize(SystemScores& origin_score);
 

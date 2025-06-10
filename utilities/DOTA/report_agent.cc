@@ -3,6 +3,7 @@
 //
 
 #include "rocksdb/utilities/report_agent.h"
+#include <cassert>
 
 #include "rocksdb/utilities/DOTA_tuner.h"
 
@@ -183,6 +184,7 @@ void ReporterWithMoreDetails::DetectAndTuning(int secs_elapsed) {
   //  report_file_->Append(",");
   //  ReportLine(secs_elapsed, total_ops_done_);
   secs_elapsed++;
+  assert(secs_elapsed > -1e9);
 }
 
 Status ReporterAgentWithSILK::ReportLine(int secs_elapsed,
