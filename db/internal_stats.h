@@ -590,6 +590,9 @@ class InternalStats {
   // DBPropertyInfo struct used internally for retrieving properties.
   static const UnorderedMap<std::string, DBPropertyInfo> ppt_name_to_info;
 
+  double GetWriteAmplification();
+  double GetIOIntensity();
+
  private:
   void DumpDBMapStats(std::map<std::string, std::string>* db_stats);
   void DumpDBStats(std::string* value);

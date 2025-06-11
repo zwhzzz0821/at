@@ -9,15 +9,21 @@
 #include <cassert>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <mutex>
 #include <string>
 
 #include "db/db_impl/db_impl.h"
+#include "monitoring/histogram.h"
 #include "rocksdb/advanced_options.h"
+#include "rocksdb/statistics.h"
+#include "rocksdb/table_properties.h"
 #include "rocksdb/thread_status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
+#include "rocksdb/utilities/write_batch_with_index.h"
+#include "system_metric_getter.h"
 namespace ROCKSDB_NAMESPACE {
 
 typedef std::vector<double> LSM_STATE;
@@ -31,14 +37,16 @@ class ReporterWithMoreDetails;
 class ReporterAgentWithTuning;
 class ReporterAgentWithSILK;
 
-enum BenchType : int  {
-  zipfian = 0,
-  uniform = 1
+enum DistributionType : unsigned char {
+  kFixed = 0,
+  kUniform,
+  kNormal
 };
 
 enum BenchSeqType : int  {
-  seq = 0,
-  random = 1
+  kSeq = 0,
+  kRandom = 1,
+  kSeqUnknown = 2
 };
 
 struct TetrisMetrics {
@@ -50,14 +58,34 @@ struct TetrisMetrics {
   double write_amplification_;
   double read_write_ratio_;
   double io_intensity_;
+  uint64_t compaction_granularity_;
   BenchSeqType seq_random_;
-  BenchType zipfian_uniform_;
-  double key_value_size_distribution_;
+  DistributionType distribution_type_;
+  double key_value_size_distribution_; // not implemented yet
   double cpu_usage_; // %
-  double mem_usage_; // MB
-  double io_bandwidth_; // MB/s
-  uint64_t memtable_size_; // MB
+  double mem_usage_; // %
+  double memtable_size_; // MB
   uint64_t bloom_filter_size_; // MB
+
+  std::string ToString() {
+    return "TetrisMetrics: throughput=" + std::to_string(throughput_) +
+           ", p99_read_latency=" + std::to_string(p99_read_latency_) +
+           ", p999_read_latency=" + std::to_string(p999_read_latency_) +
+           ", p99_write_latency=" + std::to_string(p99_write_latency_) +
+           ", p999_write_latency=" + std::to_string(p999_write_latency_) +
+           ", write_amplification=" + std::to_string(write_amplification_) +
+           ", read_write_ratio=" + std::to_string(read_write_ratio_) +
+           ", io_intensity=" + std::to_string(io_intensity_) +
+           ", compaction_granularity=" + std::to_string(compaction_granularity_) +
+           ", seq_random=" + std::to_string(seq_random_) +
+           ", distribution_type=" + std::to_string(distribution_type_) +
+           ", key_value_size_distribution=" +
+           std::to_string(key_value_size_distribution_) +
+           ", cpu_usage=" + std::to_string(cpu_usage_) +
+           ", mem_usage=" + std::to_string(mem_usage_) +
+           ", memtable_size=" + std::to_string(memtable_size_) +
+           ", bloom_filter_size=" + std::to_string(bloom_filter_size_);
+  }
 };
 
 enum OperationType : unsigned char {
@@ -372,7 +400,16 @@ class ReporterTetris : public ReporterAgent {
   Version* version;
   ColumnFamilyData* cfd;
   VersionStorageInfo* vfs;
+  uint64_t read_count_ = 0;
+  uint64_t write_count_ = 0;
   
+  void DetectAndTuning(int secs_elapsed) override {
+    // This reporter does not support tuning
+    // just update the system info
+    UpdateMetric(secs_elapsed);
+    std::cout << current_metrics_.ToString() << std::endl;
+  }
+
   void UpdateSystemInfo() {
     current_opt = db_ptr->GetOptions();
     version = db_ptr->GetVersionSet()
@@ -411,6 +448,52 @@ class ReporterTetris : public ReporterAgent {
     }
     return p99 / 1000.0; // convert to ms
   }
+  double GetReadWriteRatio() {
+    OperationType read_op = kRead;
+    OperationType write_op = kWrite;
+    auto read_hist = hist_->find(read_op);
+    auto write_hist = hist_->find(write_op);
+    int read_count = 0;
+    int write_count = 0;
+    if (read_hist != hist_->end()) {
+      read_count = read_hist->second->num();
+    } 
+    if (write_hist != hist_->end()) {
+      write_count = write_hist->second->num();
+    }
+    int last_interval_read_count = read_count - read_count_;
+    int last_interval_write_count = write_count - write_count_;
+    read_count_ = read_count;
+    write_count_ = write_count;
+    if (last_interval_write_count == 0) {
+      return 0.0; // avoid division by zero
+    }
+    return static_cast<double>(last_interval_read_count) /
+           last_interval_write_count; // read/write ratio
+  }
+  uint64_t GetFilterSize() {
+    std::shared_ptr<const TableProperties> tp;
+    cfd->current()->GetAggregatedTableProperties(&tp);
+    if (tp == nullptr) {
+      std::cout << "No table properties found" << std::endl;
+      return 0;
+    }
+    return tp->filter_size;
+  }
+  uint64_t GetMemtableSize() {
+    std::string out;
+    db_ptr->GetProperty("rocksdb.cur-size-all-mem-tables", &out);
+    return std::stoull(out); // in bytes
+  }
+  uint64_t GetCompactionGranularity() {
+    if (cfd->ioptions()->stats == nullptr) {
+      std::cout << "No stats available for compaction granularity" << std::endl;
+      return 0;
+    }
+    HistogramData data;
+    cfd->ioptions()->stats->histogramData(Histograms::NUM_FILES_IN_SINGLE_COMPACTION, &data);
+    return data.sum;
+  }
   double GetThroughtput(int secs_elapsed,
                         int total_ops_done_snapshot) {
     if (secs_elapsed == 0) {
@@ -422,15 +505,15 @@ class ReporterTetris : public ReporterAgent {
   BenchSeqType GetSeqRandomType() {
     return current_metrics_.seq_random_;
   }
-  BenchType GetZipfianUniformType() {
-    return current_metrics_.zipfian_uniform_;
+  DistributionType GetDistributionType() {
+    return current_metrics_.distribution_type_;
   }
  public:
   ReporterTetris(DBImpl* running_db, Env* env, const std::string& fname,
                  uint64_t report_interval_secs, BenchSeqType seq_random_type, 
-                 BenchType zipfian_uniform_type)
+                 DistributionType distribution_type)
       : ReporterAgent(env, fname, report_interval_secs, Tetris_header()) {
-    current_metrics_.zipfian_uniform_ = zipfian_uniform_type;
+    current_metrics_.distribution_type_ = distribution_type;
     current_metrics_.seq_random_ = seq_random_type;
     if (running_db == nullptr) {
       std::cout << "Missing parameter db_ to record more details" << std::endl;
@@ -459,19 +542,29 @@ class ReporterTetris : public ReporterAgent {
     metrics.p999_read_latency_ = GetReadLantency(0.999);
     metrics.p999_write_latency_ = GetWriteLantency(0.999);
     // write amplification
-    
-    // read/write ratio 从hist里获取
+    metrics.write_amplification_ = cfd->internal_stats()->GetWriteAmplification();
+    // read/write ratio
+    metrics.read_write_ratio_ = GetReadWriteRatio(); 
     // IO intensity 
+    metrics.io_intensity_ = cfd->internal_stats()->GetIOIntensity();
+    // compaction granularity
+    metrics.compaction_granularity_ = GetCompactionGranularity();
     // Seq/Random 
     metrics.seq_random_ = GetSeqRandomType();
     // Zipfian/uniform
-    metrics.zipfian_uniform_ = GetZipfianUniformType();
-    // key-value size distribution
+    metrics.distribution_type_ = GetDistributionType();
+    // key-value size distribution TODO
     // CPU usage 从proc中获取
+    metrics.cpu_usage_ = getCpuUsage();
     // MEM usage 从proc中获取
-    // IO bandwidth 
+    metrics.mem_usage_ = getMemoryUsage();
     // memtable size getProperty
+    metrics.memtable_size_ = static_cast<double>(GetMemtableSize())
+                                   / (1024 * 1024); // MB
     // bloom filter size
+    metrics.bloom_filter_size_ = GetFilterSize();
+    
+    // finished
     current_metrics_ = metrics;
   }
 };

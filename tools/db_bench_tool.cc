@@ -1794,12 +1794,6 @@ static Status CreateMemTableRepFactory(
 
 }  // namespace
 
-enum DistributionType : unsigned char {
-  kFixed = 0,
-  kUniform,
-  kNormal
-};
-
 static enum DistributionType FLAGS_value_size_distribution_type_e = kFixed;
 
 static enum DistributionType StringToDistributionType(const char* ctype) {
@@ -3818,6 +3812,37 @@ class Benchmark {
     }
   }
 
+  BenchSeqType GetBenchSeqType(const Slice& name) {
+    if (name == "fillseq"
+      ||name == "fillseqdeterministic"
+      ||name == "fillseekseq"
+      ||name == "fillbatch"
+      ||name == "fillseq"
+      ||name == "deleteseq") {
+      return BenchSeqType::kSeq;
+    } else if (name == "fillrandom"
+               || name == "overwrite"
+               || name == "fillsync"
+               || name == "fill100K"
+               || name == "deleterandom"
+               || name == "readrandom"
+               || name == "readmissing"
+               || name == "readhot"
+               || name == "seekrandom"
+               || name == "seekrandomwhilewriting"
+               || name == "seekrandomwhilemerging"
+               || name == "readrandomwriterandom"
+               || name == "readwhilewriting"
+               || name == "revrangeww"
+               || name == "fwdrangeww"
+               || name == "mixgraph") {
+      return BenchSeqType::kRandom;
+    } else {
+      return BenchSeqType::kSeqUnknown;
+    }
+  }
+
+
   Stats RunBenchmark(int n, Slice name,
                      void (Benchmark::*method)(ThreadState*)) {
     SharedState shared;
@@ -3836,39 +3861,44 @@ class Benchmark {
     }
 
     std::unique_ptr<ReporterAgent> reporter_agent;
-    if (FLAGS_report_interval_seconds > 0) {
-      if ( FLAGS_DOTA_enabled || FLAGS_TEA_enable ||
-          FLAGS_FEA_enable) {
-        // need to use another Report Agent
-        if (FLAGS_DOTA_tuning_gap == 0) {
-          reporter_agent.reset(new ReporterAgentWithTuning(
-              reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-              FLAGS_report_interval_seconds, FLAGS_report_interval_seconds));
-        } else {
-          reporter_agent.reset(new ReporterAgentWithTuning(
-              reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-              FLAGS_report_interval_seconds, FLAGS_DOTA_tuning_gap));
-        }
-        auto tuner_agent =
-            reinterpret_cast<ReporterAgentWithTuning*>(reporter_agent.get());
-        tuner_agent->UseFEATTuner(FLAGS_TEA_enable, FLAGS_FEA_enable);
-        tuner_agent->GetTuner()->set_idle_ratio(FLAGS_idle_rate);
-        tuner_agent->GetTuner()->set_gap_threshold(FLAGS_FEA_gap_threshold);
-        tuner_agent->GetTuner()->set_slow_flush_threshold(FLAGS_TEA_slow_flush);
-      } else if (FLAGS_detailed_running_stats) {
-        reporter_agent.reset(new ReporterWithMoreDetails(
-            reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-            FLAGS_report_interval_seconds));
-      } else if (FLAGS_SILK_triggered) {
-        reporter_agent.reset(new ReporterAgentWithSILK(
-            reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-            FLAGS_report_interval_seconds, FLAGS_value_size,
-            FLAGS_SILK_bandwidth_limitation));
-      } else {
-        reporter_agent.reset(new ReporterAgent(FLAGS_env, FLAGS_report_file,
-                                               FLAGS_report_interval_seconds));
-      }
-    }
+    reporter_agent.reset(new ReporterTetris (
+        reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+        FLAGS_report_interval_seconds, 
+        GetBenchSeqType(name), StringToDistributionType(name.data())
+    )); 
+    // if (FLAGS_report_interval_seconds > 0) {
+    //   if ( FLAGS_DOTA_enabled || FLAGS_TEA_enable ||
+    //       FLAGS_FEA_enable) {
+    //     // need to use another Report Agent
+    //     if (FLAGS_DOTA_tuning_gap == 0) {
+    //       reporter_agent.reset(new ReporterAgentWithTuning(
+    //           reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+    //           FLAGS_report_interval_seconds, FLAGS_report_interval_seconds));
+    //     } else {
+    //       reporter_agent.reset(new ReporterAgentWithTuning(
+    //           reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+    //           FLAGS_report_interval_seconds, FLAGS_DOTA_tuning_gap));
+    //     }
+    //     auto tuner_agent =
+    //         reinterpret_cast<ReporterAgentWithTuning*>(reporter_agent.get());
+    //     tuner_agent->UseFEATTuner(FLAGS_TEA_enable, FLAGS_FEA_enable);
+    //     tuner_agent->GetTuner()->set_idle_ratio(FLAGS_idle_rate);
+    //     tuner_agent->GetTuner()->set_gap_threshold(FLAGS_FEA_gap_threshold);
+    //     tuner_agent->GetTuner()->set_slow_flush_threshold(FLAGS_TEA_slow_flush);
+    //   } else if (FLAGS_detailed_running_stats) {
+    //     reporter_agent.reset(new ReporterWithMoreDetails(
+    //         reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+    //         FLAGS_report_interval_seconds));
+    //   } else if (FLAGS_SILK_triggered) {
+    //     reporter_agent.reset(new ReporterAgentWithSILK(
+    //         reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+    //         FLAGS_report_interval_seconds, FLAGS_value_size,
+    //         FLAGS_SILK_bandwidth_limitation));
+    //   } else {
+    //     reporter_agent.reset(new ReporterAgent(FLAGS_env, FLAGS_report_file,
+    //                                            FLAGS_report_interval_seconds));
+    //   }
+    // }
 
     ThreadArg* arg = new ThreadArg[n];
 
