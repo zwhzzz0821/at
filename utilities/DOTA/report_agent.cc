@@ -2,10 +2,12 @@
 // Created by jinghuan on 5/24/21.
 //
 
-#include "rocksdb/utilities/report_agent.h"
 #include <cassert>
 
+#include "rocksdb/slice.h"
+#include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
+#include "rocksdb/utilities/report_agent.h"
 
 namespace ROCKSDB_NAMESPACE {
 ReporterAgent::~ReporterAgent() {
@@ -28,8 +30,75 @@ Status ReporterAgent::ReportLine(int secs_elapsed,
   auto s = report_file_->Append(report);
   return s;
 }
+
+void ReporterAgent::UpdateSeqScore(Slice* key, Slice* value) {
+  if (key == nullptr) {
+    return;  // no key, do nothing
+  }
+  if (seq_ascending_ == 0) {
+    if (key->compare(last_key_) < 0) {
+      seq_ascending_ = 2;  // descending
+    } else if (key->compare(last_key_) > 0) {
+      seq_ascending_ = 1;  // ascending
+    } else {
+      key_num_in_seq_++;  // same key, just increase the count
+    }
+    sequnencial_key_num_++;
+  } else {
+    if (seq_ascending_ == 1) {
+      if (key->compare(last_key_) < 0) {
+        seq_ascending_ = 2;
+      } else {
+        sequnencial_key_num_++;
+      }
+    } else if (seq_ascending_ == 2) {
+      if (key->compare(last_key_) > 0) {
+        seq_ascending_ = 1;  // reset
+      } else {
+        sequnencial_key_num_++;
+      }
+    }
+  }
+  key_num_in_seq_++;
+  last_key_ = *key;
+  current_metrics_.seq_score_ = static_cast<double>(sequnencial_key_num_) /
+                                static_cast<double>(key_num_in_seq_);
+}
+
+void ReporterAgent::UpdateRwRatioScore(OperationType op_type, Slice* key,
+                                       Slice* value) {
+  if (key == nullptr) {
+    return;  // no key or value, do nothing
+  }
+  if (op_type == kWrite || op_type == kUpdate || op_type == kDelete ||
+      op_type == kMerge) {
+    if (value == nullptr) {  // delete opt
+      write_opt_size_sum_ += key->size();
+    } else {
+      write_opt_size_sum_ += key->size() + value->size();
+    }
+  } else if (op_type == kRead || op_type == kSeek) {
+    // read option
+    read_opt_size_sum_ += key->size() + value->size();
+  } else {
+    // other option, do nothing
+  }
+
+  if (write_opt_size_sum_ == 0) {
+    current_metrics_.rw_ratio_score_ = std::numeric_limits<double>::max();
+  } else {
+    current_metrics_.rw_ratio_score_ =
+        static_cast<double>(read_opt_size_sum_) / write_opt_size_sum_;
+  }
+}
+void ReporterAgent::UpdateDistributionScore(Slice* key, Slice* value) {
+  // TODO
+  if (key->size() == 0 || value->size() == 0) {
+    return;
+  }
+}
+
 const TetrisMetrics& ReporterAgent::GetMetrics() const {
-  assert(false);
   return current_metrics_;
 }
 void ReporterAgent::UpdateMetric(int secs_elapsed) {
@@ -64,8 +133,8 @@ Status ReporterAgentWithTuning::ReportLine(int secs_elapsed,
   auto opt = this->running_db_->GetOptions();
 
   std::string report = std::to_string(secs_elapsed) + "," +
-                       std::to_string(total_ops_done_snapshot - last_report_) + "," +
-                       std::to_string(opt.write_buffer_size >> 20) + "," +
+                       std::to_string(total_ops_done_snapshot - last_report_) +
+                       "," + std::to_string(opt.write_buffer_size >> 20) + "," +
                        std::to_string(opt.max_background_jobs);
   auto s = report_file_->Append(report);
   return s;
@@ -233,8 +302,8 @@ Status ReporterAgentWithSILK::ReportLine(int secs_elapsed,
   }
   // Adjust the tuner from SILK before reporting
   std::string report = std::to_string(secs_elapsed) + "," +
-                       std::to_string(total_ops_done_snapshot - last_report_) + "," +
-                       std::to_string(cur_bandwidth_user_ops_MBPS);
+                       std::to_string(total_ops_done_snapshot - last_report_) +
+                       "," + std::to_string(cur_bandwidth_user_ops_MBPS);
   auto s = report_file_->Append(report);
   return s;
 }
@@ -250,6 +319,19 @@ ReporterAgentWithSILK::ReporterAgentWithSILK(DBImpl* running_db, Env* env,
   running_db_ = running_db;
   this->FLAGS_value_size = value_size;
   this->FLAGS_SILK_bandwidth_limitation = bandwidth_limitation;
+}
+
+Status ReporterTetris::ReportLine(int secs_elapsed,
+                                  int total_ops_done_snapshot) {
+  auto opt = this->db_ptr->GetOptions();
+
+  // //TODO: append all metrics to the report file
+  // std::string report = std::to_string(secs_elapsed) + "," +
+  //                      std::to_string(total_ops_done_snapshot - last_report_)
+  //                      + "," + std::to_string(opt.write_buffer_size >> 20) +
+  //                      "," + std::to_string(opt.max_background_jobs);
+  // auto s = report_file_->Append(report);
+  return Status::OK();
 }
 
 };  // namespace ROCKSDB_NAMESPACE

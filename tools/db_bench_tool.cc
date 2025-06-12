@@ -68,10 +68,10 @@
 #ifndef ROCKSDB_LITE
 #include "rocksdb/utilities/replayer.h"
 #endif  // ROCKSDB_LITE
+#include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/utilities/sim_cache.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
-#include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/write_batch.h"
 #include "test_util/testutil.h"
 #include "test_util/transaction_test_util.h"
@@ -92,7 +92,6 @@
 #include "utilities/merge_operators/bytesxor.h"
 #include "utilities/merge_operators/sortlist.h"
 #include "utilities/persistent_cache/block_cache_tier.h"
-
 #include "ycsbcore/client.h"
 #include "ycsbcore/core_workload.h"
 #include "ycsbcore/countdown_latch.h"
@@ -296,10 +295,12 @@ DEFINE_string(column_family_distribution, "",
               "and `num_hot_column_families=0`, a valid list could be "
               "\"10,20,30,40\".");
 
-DEFINE_int64(reads, -1, "Number of read operations to do.  "
+DEFINE_int64(reads, -1,
+             "Number of read operations to do.  "
              "If negative, do FLAGS_num reads.");
 
-DEFINE_int64(deletes, -1, "Number of delete operations to do.  "
+DEFINE_int64(deletes, -1,
+             "Number of delete operations to do.  "
              "If negative, do FLAGS_num deletions.");
 
 DEFINE_int32(bloom_locality, 0, "Control bloom filter probes locality");
@@ -311,7 +312,8 @@ static int64_t seed_base;
 
 DEFINE_int32(threads, 1, "Number of concurrent threads to run.");
 
-DEFINE_int32(duration, 0, "Time in seconds for the random-ops tests to run."
+DEFINE_int32(duration, 0,
+             "Time in seconds for the random-ops tests to run."
              " When 0 then num & reads determine the test duration");
 
 DEFINE_string(value_size_distribution_type, "fixed",
@@ -364,7 +366,8 @@ DEFINE_int32(user_timestamp_size, 0,
 DEFINE_int32(num_multi_db, 0,
              "Number of DBs used in the benchmark. 0 means single DB.");
 
-DEFINE_double(compression_ratio, 0.5, "Arrange to generate values that shrink"
+DEFINE_double(compression_ratio, 0.5,
+              "Arrange to generate values that shrink"
               " to this fraction of their original size after compression");
 
 DEFINE_double(
@@ -521,9 +524,8 @@ DEFINE_int32(max_background_compactions,
 DEFINE_uint64(subcompactions, 1,
               "Maximum number of subcompactions to divide L0-L1 compactions "
               "into.");
-static const bool FLAGS_subcompactions_dummy
-    __attribute__((__unused__)) = RegisterFlagValidator(&FLAGS_subcompactions,
-                                                    &ValidateUint32Range);
+static const bool FLAGS_subcompactions_dummy __attribute__((__unused__)) =
+    RegisterFlagValidator(&FLAGS_subcompactions, &ValidateUint32Range);
 
 DEFINE_int32(max_background_flushes,
              ROCKSDB_NAMESPACE::Options().max_background_flushes,
@@ -544,10 +546,12 @@ DEFINE_int32(universal_size_ratio, 0,
              "Percentage flexibility while comparing file size"
              " (for universal compaction only).");
 
-DEFINE_int32(universal_min_merge_width, 0, "The minimum number of files in a"
+DEFINE_int32(universal_min_merge_width, 0,
+             "The minimum number of files in a"
              " single compaction run (for universal compaction only).");
 
-DEFINE_int32(universal_max_merge_width, 0, "The max number of files to compact"
+DEFINE_int32(universal_max_merge_width, 0,
+             "The max number of files to compact"
              " in universal style compaction");
 
 DEFINE_int32(universal_max_size_amplification_percent, 0,
@@ -751,7 +755,8 @@ DEFINE_bool(whole_key_filtering,
             ROCKSDB_NAMESPACE::BlockBasedTableOptions().whole_key_filtering,
             "Use whole keys (in addition to prefixes) in SST bloom filter.");
 
-DEFINE_bool(use_existing_db, false, "If true, do not destroy the existing"
+DEFINE_bool(use_existing_db, false,
+            "If true, do not destroy the existing"
             " database.  If you set this flag and also specify a benchmark that"
             " wants a fresh database, that benchmark will fail.");
 
@@ -785,16 +790,13 @@ DEFINE_int32(SILK_bandwidth_limitation, 200, "MBPS of disk limitation");
 DEFINE_bool(SILK_triggered, false, "Whether the SILK tuner is triggered");
 DEFINE_double(idle_rate, 1.25,
               "TEA will decide this as the idle rate of the threads");
-DEFINE_double(FEA_gap_threshold, 1.5,
-              "The negative feedback loop's threshold");
+DEFINE_double(FEA_gap_threshold, 1.5, "The negative feedback loop's threshold");
 DEFINE_double(TEA_slow_flush, 0.5, "The negative feedback loop's threshold");
 DEFINE_double(DOTA_tuning_gap, 1.0, "Tuning gap of the DOTA agent, in secs ");
 DEFINE_int64(random_fill_average, 150,
              "average inputs rate of background write operations");
 DEFINE_bool(detailed_running_stats, false,
             "Whether record more detailed information in report agent");
-
-
 
 DEFINE_bool(progress_reports, true,
             "If true, db_bench will report number of finished operations.");
@@ -817,8 +819,8 @@ DEFINE_bool(use_keep_filter, false, "Whether to use a noop compaction filter");
 
 static bool ValidateCacheNumshardbits(const char* flagname, int32_t value) {
   if (value >= 20) {
-    fprintf(stderr, "Invalid value for --%s: %d, must be < 20\n",
-            flagname, value);
+    fprintf(stderr, "Invalid value for --%s: %d, must be < 20\n", flagname,
+            value);
     return false;
   }
   return true;
@@ -838,10 +840,12 @@ DEFINE_int32(stats_level, ROCKSDB_NAMESPACE::StatsLevel::kExceptDetailedTimers,
 DEFINE_string(statistics_string, "", "Serialized statistics string");
 static class std::shared_ptr<ROCKSDB_NAMESPACE::Statistics> dbstats;
 
-DEFINE_int64(writes, -1, "Number of write operations to do. If negative, do"
+DEFINE_int64(writes, -1,
+             "Number of write operations to do. If negative, do"
              " --num reads.");
 
-DEFINE_bool(finish_after_writes, false, "Write thread terminates after all writes are finished");
+DEFINE_bool(finish_after_writes, false,
+            "Write thread terminates after all writes are finished");
 
 DEFINE_bool(sync, false, "Sync all writes to disk");
 
@@ -906,24 +910,27 @@ DEFINE_uint64(periodic_compaction_seconds,
 DEFINE_uint64(ttl_seconds, ROCKSDB_NAMESPACE::Options().ttl, "Set options.ttl");
 
 static bool ValidateInt32Percent(const char* flagname, int32_t value) {
-  if (value <= 0 || value>=100) {
-    fprintf(stderr, "Invalid value for --%s: %d, 0< pct <100 \n",
-            flagname, value);
+  if (value <= 0 || value >= 100) {
+    fprintf(stderr, "Invalid value for --%s: %d, 0< pct <100 \n", flagname,
+            value);
     return false;
   }
   return true;
 }
-DEFINE_int32(readwritepercent, 90, "Ratio of reads to reads/writes (expressed"
+DEFINE_int32(readwritepercent, 90,
+             "Ratio of reads to reads/writes (expressed"
              " as percentage) for the ReadRandomWriteRandom workload. The "
              "default value 90 means 90% operations out of all reads and writes"
              " operations are reads. In other words, 9 gets for every 1 put.");
 
-DEFINE_int32(mergereadpercent, 70, "Ratio of merges to merges&reads (expressed"
+DEFINE_int32(mergereadpercent, 70,
+             "Ratio of merges to merges&reads (expressed"
              " as percentage) for the ReadRandomMergeRandom workload. The"
              " default value 70 means 70% out of all read and merge operations"
              " are merges. In other words, 7 merges for every 3 gets.");
 
-DEFINE_int32(deletepercent, 2, "Percentage of deletes out of reads/writes/"
+DEFINE_int32(deletepercent, 2,
+             "Percentage of deletes out of reads/writes/"
              "deletes (used in RandomWithVerify only). RandomWithVerify "
              "calculates writepercent as (100 - FLAGS_readwritepercent - "
              "deletepercent), so deletepercent must be smaller than (100 - "
@@ -1326,7 +1333,8 @@ DEFINE_int32(compression_zstd_max_train_bytes,
              "Maximum size of training data passed to zstd's dictionary "
              "trainer.");
 
-DEFINE_int32(min_level_to_compress, -1, "If non-negative, compression starts"
+DEFINE_int32(min_level_to_compress, -1,
+             "If non-negative, compression starts"
              " from this level. Levels with number < min_level_to_compress are"
              " not compressed. Otherwise, apply compression_type to "
              "all levels.");
@@ -1379,13 +1387,16 @@ static std::shared_ptr<ROCKSDB_NAMESPACE::Env> env_guard;
 
 static ROCKSDB_NAMESPACE::Env* FLAGS_env = ROCKSDB_NAMESPACE::Env::Default();
 
-DEFINE_int64(stats_interval, 0, "Stats are reported every N operations when "
+DEFINE_int64(stats_interval, 0,
+             "Stats are reported every N operations when "
              "this is greater than zero. When 0 the interval grows over time.");
 
-DEFINE_int64(stats_interval_seconds, 0, "Report stats every N seconds. This "
+DEFINE_int64(stats_interval_seconds, 0,
+             "Report stats every N seconds. This "
              "overrides stats_interval when both are > 0.");
 
-DEFINE_int32(stats_per_interval, 0, "Reports additional stats per interval when"
+DEFINE_int32(stats_per_interval, 0,
+             "Reports additional stats per interval when"
              " this is greater than 0.");
 
 DEFINE_uint64(slow_usecs, 1000000,
@@ -1460,24 +1471,19 @@ DEFINE_bool(rate_limiter_auto_tuned, false,
             "Enable dynamic adjustment of rate limit according to demand for "
             "background I/O");
 
+DEFINE_bool(sine_write_rate, false, "Use a sine wave write_rate_limit");
 
-DEFINE_bool(sine_write_rate, false,
-            "Use a sine wave write_rate_limit");
+DEFINE_uint64(
+    sine_write_rate_interval_milliseconds, 10000,
+    "Interval of which the sine wave write_rate_limit is recalculated");
 
-DEFINE_uint64(sine_write_rate_interval_milliseconds, 10000,
-              "Interval of which the sine wave write_rate_limit is recalculated");
+DEFINE_double(sine_a, 1, "A in f(x) = A sin(bx + c) + d");
 
-DEFINE_double(sine_a, 1,
-             "A in f(x) = A sin(bx + c) + d");
+DEFINE_double(sine_b, 1, "B in f(x) = A sin(bx + c) + d");
 
-DEFINE_double(sine_b, 1,
-             "B in f(x) = A sin(bx + c) + d");
+DEFINE_double(sine_c, 0, "C in f(x) = A sin(bx + c) + d");
 
-DEFINE_double(sine_c, 0,
-             "C in f(x) = A sin(bx + c) + d");
-
-DEFINE_double(sine_d, 1,
-             "D in f(x) = A sin(bx + c) + d");
+DEFINE_double(sine_d, 1, "D in f(x) = A sin(bx + c) + d");
 
 DEFINE_bool(rate_limit_bg_reads, false,
             "Use options.rate_limiter on compaction reads");
@@ -1567,7 +1573,8 @@ DEFINE_bool(print_malloc_stats, false,
 DEFINE_bool(disable_auto_compactions, false, "Do not auto trigger compactions");
 
 DEFINE_uint64(wal_ttl_seconds, 0, "Set the TTL for the WAL Files in seconds.");
-DEFINE_uint64(wal_size_limit_MB, 0, "Set the size limit for the WAL Files"
+DEFINE_uint64(wal_size_limit_MB, 0,
+              "Set the size limit for the WAL Files"
               " in MB.");
 DEFINE_uint64(max_total_wal_size, 0, "Set total max WAL size");
 
@@ -1635,11 +1642,12 @@ DEFINE_int32(num_deletion_threads, 1,
              "Number of threads to do deletion (used in TimeSeries and delete "
              "expire_style only).");
 
-DEFINE_int32(max_successive_merges, 0, "Maximum number of successive merge"
+DEFINE_int32(max_successive_merges, 0,
+             "Maximum number of successive merge"
              " operations on a key in the memtable");
 
 static bool ValidatePrefixSize(const char* flagname, int32_t value) {
-  if (value < 0 || value>=2000000000) {
+  if (value < 0 || value >= 2000000000) {
     fprintf(stderr, "Invalid value for --%s: %d. 0<= PrefixSize <=2000000000\n",
             flagname, value);
     return false;
@@ -1647,9 +1655,11 @@ static bool ValidatePrefixSize(const char* flagname, int32_t value) {
   return true;
 }
 
-DEFINE_int32(prefix_size, 0, "control the prefix size for HashSkipList and "
+DEFINE_int32(prefix_size, 0,
+             "control the prefix size for HashSkipList and "
              "plain table");
-DEFINE_int64(keys_per_prefix, 0, "control average number of keys generated "
+DEFINE_int64(keys_per_prefix, 0,
+             "control average number of keys generated "
              "per prefix, 0 means no special handling of the prefix, "
              "i.e. use the prefix comes with the generated random number.");
 DEFINE_bool(total_order_seek, false,
@@ -1663,11 +1673,14 @@ DEFINE_bool(
 DEFINE_int32(memtable_insert_with_hint_prefix_size, 0,
              "If non-zero, enable "
              "memtable insert with hint with the given prefix size.");
-DEFINE_bool(enable_io_prio, false, "Lower the background flush/compaction "
+DEFINE_bool(enable_io_prio, false,
+            "Lower the background flush/compaction "
             "threads' IO priority");
-DEFINE_bool(enable_cpu_prio, false, "Lower the background flush/compaction "
+DEFINE_bool(enable_cpu_prio, false,
+            "Lower the background flush/compaction "
             "threads' CPU priority");
-DEFINE_bool(identity_as_first_hash, false, "the first hash function of cuckoo "
+DEFINE_bool(identity_as_first_hash, false,
+            "the first hash function of cuckoo "
             "table becomes an identity function. This is only valid when key "
             "is 8 bytes");
 DEFINE_bool(dump_malloc_stats, true, "Dump malloc stats in LOG ");
@@ -1692,21 +1705,26 @@ DEFINE_bool(multiread_batched, false, "Use the new MultiGet API");
 
 DEFINE_string(memtablerep, "skip_list", "");
 DEFINE_int64(hash_bucket_count, 1024 * 1024, "hash bucket count");
-DEFINE_bool(use_plain_table, false, "if use plain table "
+DEFINE_bool(use_plain_table, false,
+            "if use plain table "
             "instead of block-based table format");
 DEFINE_bool(use_cuckoo_table, false, "if use cuckoo table format");
 DEFINE_double(cuckoo_hash_ratio, 0.9, "Hash ratio for Cuckoo SST table.");
-DEFINE_bool(use_hash_search, false, "if use kHashSearch "
+DEFINE_bool(use_hash_search, false,
+            "if use kHashSearch "
             "instead of kBinarySearch. "
             "This is valid if only we use BlockTable");
-DEFINE_string(merge_operator, "", "The merge operator to use with the database."
+DEFINE_string(merge_operator, "",
+              "The merge operator to use with the database."
               "If a new merge operator is specified, be sure to use fresh"
               " database The possible merge operators are defined in"
               " utilities/merge_operators.h");
-DEFINE_int32(skip_list_lookahead, 0, "Used with skip_list memtablerep; try "
+DEFINE_int32(skip_list_lookahead, 0,
+             "Used with skip_list memtablerep; try "
              "linear search first for this many steps from the previous "
              "position");
-DEFINE_bool(report_file_operations, false, "if report number of file "
+DEFINE_bool(report_file_operations, false,
+            "if report number of file "
             "operations");
 DEFINE_bool(report_open_timing, false, "if report open timing");
 DEFINE_int32(readahead_size, 0, "Iterator readahead size");
@@ -1743,9 +1761,9 @@ DEFINE_bool(allow_data_in_errors,
 
 static const bool FLAGS_deletepercent_dummy __attribute__((__unused__)) =
     RegisterFlagValidator(&FLAGS_deletepercent, &ValidateInt32Percent);
-static const bool FLAGS_table_cache_numshardbits_dummy __attribute__((__unused__)) =
-    RegisterFlagValidator(&FLAGS_table_cache_numshardbits,
-                          &ValidateTableCacheNumshardbits);
+static const bool FLAGS_table_cache_numshardbits_dummy
+    __attribute__((__unused__)) = RegisterFlagValidator(
+        &FLAGS_table_cache_numshardbits, &ValidateTableCacheNumshardbits);
 
 DEFINE_uint32(write_batch_protection_bytes_per_key, 0,
               "Size of per-key-value checksum in each write batch. Currently "
@@ -1824,33 +1842,27 @@ class BaseDistribution {
     }
     return val;
   }
+
  private:
   virtual unsigned int Get() = 0;
-  virtual bool NeedTruncate() {
-    return true;
-  }
+  virtual bool NeedTruncate() { return true; }
   unsigned int min_value_size_;
   unsigned int max_value_size_;
 };
 
-class FixedDistribution : public BaseDistribution
-{
+class FixedDistribution : public BaseDistribution {
  public:
-  FixedDistribution(unsigned int size) :
-    BaseDistribution(size, size),
-    size_(size) {}
+  FixedDistribution(unsigned int size)
+      : BaseDistribution(size, size), size_(size) {}
+
  private:
-  virtual unsigned int Get() override {
-    return size_;
-  }
-  virtual bool NeedTruncate() override {
-    return false;
-  }
+  virtual unsigned int Get() override { return size_; }
+  virtual bool NeedTruncate() override { return false; }
   unsigned int size_;
 };
 
-class NormalDistribution
-    : public BaseDistribution, public std::normal_distribution<double> {
+class NormalDistribution : public BaseDistribution,
+                           public std::normal_distribution<double> {
  public:
   NormalDistribution(unsigned int _min, unsigned int _max)
       : BaseDistribution(_min, _max),
@@ -1868,9 +1880,8 @@ class NormalDistribution
   std::mt19937 gen_;
 };
 
-class UniformDistribution
-    : public BaseDistribution,
-      public std::uniform_int_distribution<unsigned int> {
+class UniformDistribution : public BaseDistribution,
+                            public std::uniform_int_distribution<unsigned int> {
  public:
   UniformDistribution(unsigned int _min, unsigned int _max)
       : BaseDistribution(_min, _max),
@@ -1878,12 +1889,8 @@ class UniformDistribution
         gen_(rd_()) {}
 
  private:
-  virtual unsigned int Get() override {
-    return (*this)(gen_);
-  }
-  virtual bool NeedTruncate() override {
-    return false;
-  }
+  virtual unsigned int Get() override { return (*this)(gen_); }
+  virtual bool NeedTruncate() override { return false; }
   std::random_device rd_;
   std::mt19937 gen_;
 };
@@ -1896,7 +1903,6 @@ class RandomGenerator {
   std::unique_ptr<BaseDistribution> dist_;
 
  public:
-
   RandomGenerator() {
     auto max_value_size = FLAGS_value_size_max;
     switch (FLAGS_value_size_distribution_type_e) {
@@ -1905,8 +1911,8 @@ class RandomGenerator {
                                             FLAGS_value_size_max));
         break;
       case kNormal:
-        dist_.reset(new NormalDistribution(FLAGS_value_size_min,
-                                           FLAGS_value_size_max));
+        dist_.reset(
+            new NormalDistribution(FLAGS_value_size_min, FLAGS_value_size_max));
         break;
       case kFixed:
       default:
@@ -1955,7 +1961,7 @@ struct DBWithColumnFamilies {
   DB* db;
 #ifndef ROCKSDB_LITE
   OptimisticTransactionDB* opt_txn_db;
-#endif  // ROCKSDB_LITE
+#endif                              // ROCKSDB_LITE
   std::atomic<size_t> num_created;  // Need to be updated after all the
                                     // new entries in cfh are set.
   size_t num_hot;  // Number of column families to be queried at each moment.
@@ -1968,7 +1974,8 @@ struct DBWithColumnFamilies {
   DBWithColumnFamilies()
       : db(nullptr)
 #ifndef ROCKSDB_LITE
-        , opt_txn_db(nullptr)
+        ,
+        opt_txn_db(nullptr)
 #endif  // ROCKSDB_LITE
   {
     cfh.clear();
@@ -2047,19 +2054,12 @@ struct DBWithColumnFamilies {
 };
 
 static std::unordered_map<OperationType, std::string, std::hash<unsigned char>>
-                          OperationTypeString = {
-  {kRead, "read"},
-  {kWrite, "write"},
-  {kDelete, "delete"},
-  {kSeek, "seek"},
-  {kMerge, "merge"},
-  {kUpdate, "update"},
-  {kCompress, "compress"},
-  {kCompress, "uncompress"},
-  {kCrc, "crc"},
-  {kHash, "hash"},
-  {kOthers, "op"}
-};
+    OperationTypeString = {{kRead, "read"},         {kWrite, "write"},
+                           {kDelete, "delete"},     {kSeek, "seek"},
+                           {kMerge, "merge"},       {kUpdate, "update"},
+                           {kCompress, "compress"}, {kCompress, "uncompress"},
+                           {kCrc, "crc"},           {kHash, "hash"},
+                           {kOthers, "op"}};
 
 class CombinedStats;
 class Stats {
@@ -2077,7 +2077,8 @@ class Stats {
   uint64_t last_op_finish_;
   uint64_t last_report_finish_;
   std::unordered_map<OperationType, std::shared_ptr<HistogramImpl>,
-                     std::hash<unsigned char>> hist_;
+                     std::hash<unsigned char>>
+      hist_;
   std::string message_;
   bool exclude_from_merge_;
   ReporterAgent* reporter_agent_;  // does not own
@@ -2110,15 +2111,14 @@ class Stats {
   }
 
   void Merge(const Stats& other) {
-    if (other.exclude_from_merge_)
-      return;
+    if (other.exclude_from_merge_) return;
 
     for (auto it = other.hist_.begin(); it != other.hist_.end(); ++it) {
       auto this_it = hist_.find(it->first);
       if (this_it != hist_.end()) {
         this_it->second->Merge(*(other.hist_.at(it->first)));
       } else {
-        hist_.insert({ it->first, it->second });
+        hist_.insert({it->first, it->second});
       }
     }
 
@@ -2137,9 +2137,7 @@ class Stats {
     seconds_ = (finish_ - start_) * 1e-6;
   }
 
-  void AddMessage(Slice msg) {
-    AppendWithSpace(&message_, msg);
-  }
+  void AddMessage(Slice msg) { AppendWithSpace(&message_, msg); }
 
   void SetId(int id) { id_ = id; }
   void SetExcludeFromMerge() { exclude_from_merge_ = true; }
@@ -2148,27 +2146,27 @@ class Stats {
     std::vector<ThreadStatus> thread_list;
     FLAGS_env->GetThreadList(&thread_list);
 
-    fprintf(stderr, "\n%18s %10s %12s %20s %13s %45s %12s %s\n",
-        "ThreadID", "ThreadType", "cfName", "Operation",
-        "ElapsedTime", "Stage", "State", "OperationProperties");
+    fprintf(stderr, "\n%18s %10s %12s %20s %13s %45s %12s %s\n", "ThreadID",
+            "ThreadType", "cfName", "Operation", "ElapsedTime", "Stage",
+            "State", "OperationProperties");
 
     int64_t current_time = 0;
     clock_->GetCurrentTime(&current_time).PermitUncheckedError();
     for (auto ts : thread_list) {
       fprintf(stderr, "%18" PRIu64 " %10s %12s %20s %13s %45s %12s",
-          ts.thread_id,
-          ThreadStatus::GetThreadTypeName(ts.thread_type).c_str(),
-          ts.cf_name.c_str(),
-          ThreadStatus::GetOperationName(ts.operation_type).c_str(),
-          ThreadStatus::MicrosToString(ts.op_elapsed_micros).c_str(),
-          ThreadStatus::GetOperationStageName(ts.operation_stage).c_str(),
-          ThreadStatus::GetStateName(ts.state_type).c_str());
+              ts.thread_id,
+              ThreadStatus::GetThreadTypeName(ts.thread_type).c_str(),
+              ts.cf_name.c_str(),
+              ThreadStatus::GetOperationName(ts.operation_type).c_str(),
+              ThreadStatus::MicrosToString(ts.op_elapsed_micros).c_str(),
+              ThreadStatus::GetOperationStageName(ts.operation_stage).c_str(),
+              ThreadStatus::GetStateName(ts.state_type).c_str());
 
       auto op_properties = ThreadStatus::InterpretOperationProperties(
           ts.operation_type, ts.op_properties);
       for (const auto& op_prop : op_properties) {
-        fprintf(stderr, " %s %" PRIu64" |",
-            op_prop.first.c_str(), op_prop.second);
+        fprintf(stderr, " %s %" PRIu64 " |", op_prop.first.c_str(),
+                op_prop.second);
       }
       fprintf(stderr, "\n");
     }
@@ -2176,13 +2174,9 @@ class Stats {
 
   void ResetSineInterval() { sine_interval_ = clock_->NowMicros(); }
 
-  uint64_t GetSineInterval() {
-    return sine_interval_;
-  }
+  uint64_t GetSineInterval() { return sine_interval_; }
 
-  uint64_t GetStart() {
-    return start_;
-  }
+  uint64_t GetStart() { return start_; }
 
   void ResetLastOpTime() {
     // Set to now to avoid latency from calls to SleepForMicroseconds.
@@ -2190,16 +2184,16 @@ class Stats {
   }
 
   void FinishedOps(DBWithColumnFamilies* db_with_cfh, DB* db, int64_t num_ops,
-                   enum OperationType op_type = kOthers) {
+                   enum OperationType op_type = kOthers, Slice* key = nullptr,
+                   Slice* value = nullptr) {
     if (reporter_agent_) {
-      reporter_agent_->ReportFinishedOps(num_ops);
+      reporter_agent_->ReportFinishedOps(num_ops, op_type, key, value);
     }
     if (FLAGS_histogram) {
       uint64_t now = clock_->NowMicros();
       uint64_t micros = now - last_op_finish_;
 
-      if (hist_.find(op_type) == hist_.end())
-      {
+      if (hist_.find(op_type) == hist_.end()) {
         auto hist_temp = std::make_shared<HistogramImpl>();
         hist_.insert({op_type, std::move(hist_temp)});
       }
@@ -2215,13 +2209,20 @@ class Stats {
     done_ += num_ops;
     if (done_ >= next_report_ && FLAGS_progress_reports) {
       if (!FLAGS_stats_interval) {
-        if      (next_report_ < 1000)   next_report_ += 100;
-        else if (next_report_ < 5000)   next_report_ += 500;
-        else if (next_report_ < 10000)  next_report_ += 1000;
-        else if (next_report_ < 50000)  next_report_ += 5000;
-        else if (next_report_ < 100000) next_report_ += 10000;
-        else if (next_report_ < 500000) next_report_ += 50000;
-        else                            next_report_ += 100000;
+        if (next_report_ < 1000)
+          next_report_ += 100;
+        else if (next_report_ < 5000)
+          next_report_ += 500;
+        else if (next_report_ < 10000)
+          next_report_ += 1000;
+        else if (next_report_ < 50000)
+          next_report_ += 5000;
+        else if (next_report_ < 100000)
+          next_report_ += 10000;
+        else if (next_report_ < 500000)
+          next_report_ += 50000;
+        else
+          next_report_ += 100000;
         fprintf(stderr, "... finished %" PRIu64 " ops%30s\r", done_, "");
       } else {
         uint64_t now = clock_->NowMicros();
@@ -2307,9 +2308,7 @@ class Stats {
     }
   }
 
-  void AddBytes(int64_t n) {
-    bytes_ += n;
-  }
+  void AddBytes(int64_t n) { bytes_ += n; }
 
   void Report(const Slice& name) {
     // Pretend at least one op was done in case we are running a benchmark
@@ -2327,7 +2326,7 @@ class Stats {
       extra = rate;
     }
     AppendWithSpace(&extra, message_);
-    double throughput = (double)done_/elapsed;
+    double throughput = (double)done_ / elapsed;
 
     fprintf(stdout,
             "%-12s : %11.3f micros/op %ld ops/sec %.3f seconds %" PRIu64
@@ -2552,13 +2551,13 @@ struct SharedState {
   long num_done;
   bool start;
 
-  SharedState() : cv(&mu), perf_level(FLAGS_perf_level) { }
+  SharedState() : cv(&mu), perf_level(FLAGS_perf_level) {}
 };
 
 // Per-thread state for concurrent executions of the same benchmark.
 struct ThreadState {
-  int tid;             // 0..n-1 when running in n threads
-  Random64 rand;         // Has different seeds for different threads
+  int tid;        // 0..n-1 when running in n threads
+  Random64 rand;  // Has different seeds for different threads
   Stats stats;
   SharedState* shared;
 
@@ -2570,7 +2569,7 @@ class Duration {
  public:
   Duration(uint64_t max_seconds, int64_t max_ops, int64_t ops_per_stage = 0) {
     max_seconds_ = max_seconds;
-    max_ops_= max_ops;
+    max_ops_ = max_ops;
     ops_per_stage_ = (ops_per_stage > 0) ? ops_per_stage : max_ops;
     ops_ = 0;
     start_at_ = FLAGS_env->NowMicros();
@@ -2579,7 +2578,7 @@ class Duration {
   int64_t GetStage() { return std::min(ops_, max_ops_ - 1) / ops_per_stage_; }
 
   bool Done(int64_t increment) {
-    if (increment <= 0) increment = 1;    // avoid Done(0) and infinite loops
+    if (increment <= 0) increment = 1;  // avoid Done(0) and infinite loops
     ops_ += increment;
 
     if (max_seconds_) {
@@ -2636,7 +2635,7 @@ class Benchmark {
   int64_t readwrites_;
   int64_t merge_keys_;
   bool report_file_operations_;
-  bool use_blob_db_;  // Stacked BlobDB
+  bool use_blob_db_;    // Stacked BlobDB
   bool read_operands_;  // read via GetMergeOperands()
   std::vector<std::string> keys_;
 
@@ -2720,28 +2719,30 @@ class Benchmark {
             FLAGS_key_size, FLAGS_user_timestamp_size);
     auto avg_value_size = FLAGS_value_size;
     if (FLAGS_value_size_distribution_type_e == kFixed) {
-      fprintf(stdout, "Values:     %d bytes each (%d bytes after compression)\n",
+      fprintf(stdout,
+              "Values:     %d bytes each (%d bytes after compression)\n",
               avg_value_size,
               static_cast<int>(avg_value_size * FLAGS_compression_ratio + 0.5));
     } else {
       avg_value_size = (FLAGS_value_size_min + FLAGS_value_size_max) / 2;
-      fprintf(stdout, "Values:     %d avg bytes each (%d bytes after compression)\n",
+      fprintf(stdout,
+              "Values:     %d avg bytes each (%d bytes after compression)\n",
               avg_value_size,
               static_cast<int>(avg_value_size * FLAGS_compression_ratio + 0.5));
       fprintf(stdout, "Values Distribution: %s (min: %d, max: %d)\n",
-              FLAGS_value_size_distribution_type.c_str(),
-              FLAGS_value_size_min, FLAGS_value_size_max);
+              FLAGS_value_size_distribution_type.c_str(), FLAGS_value_size_min,
+              FLAGS_value_size_max);
     }
     fprintf(stdout, "Entries:    %" PRIu64 "\n", num_);
     fprintf(stdout, "Prefix:    %d bytes\n", FLAGS_prefix_size);
     fprintf(stdout, "Keys per prefix:    %" PRIu64 "\n", keys_per_prefix_);
     fprintf(stdout, "RawSize:    %.1f MB (estimated)\n",
-            ((static_cast<int64_t>(FLAGS_key_size + avg_value_size) * num_)
-             / 1048576.0));
-    fprintf(stdout, "FileSize:   %.1f MB (estimated)\n",
-            (((FLAGS_key_size + avg_value_size * FLAGS_compression_ratio)
-              * num_)
-             / 1048576.0));
+            ((static_cast<int64_t>(FLAGS_key_size + avg_value_size) * num_) /
+             1048576.0));
+    fprintf(
+        stdout, "FileSize:   %.1f MB (estimated)\n",
+        (((FLAGS_key_size + avg_value_size * FLAGS_compression_ratio) * num_) /
+         1048576.0));
     fprintf(stdout, "Write rate: %" PRIu64 " bytes/second\n",
             FLAGS_benchmark_write_rate_limit);
     fprintf(stdout, "Read rate: %" PRIu64 " ops/second\n",
@@ -2775,9 +2776,9 @@ class Benchmark {
 
   void PrintWarnings(const char* compression) {
 #if defined(__GNUC__) && !defined(__OPTIMIZE__)
-    fprintf(stdout,
-            "WARNING: Optimization is disabled: benchmarks unnecessarily slow\n"
-            );
+    fprintf(
+        stdout,
+        "WARNING: Optimization is disabled: benchmarks unnecessarily slow\n");
 #endif
 #ifndef NDEBUG
     fprintf(stdout,
@@ -2813,7 +2814,7 @@ class Benchmark {
       start++;
     }
     unsigned int limit = static_cast<unsigned int>(s.size());
-    while (limit > start && isspace(s[limit-1])) {
+    while (limit > start && isspace(s[limit - 1])) {
       limit--;
     }
     return Slice(s.data() + start, limit - start);
@@ -3418,8 +3419,8 @@ class Benchmark {
         method = &Benchmark::ApproximateSizeRandom;
       } else if (name == "mixgraph") {
         method = &Benchmark::MixGraph;
-      } 
-     // for FEAT 
+      }
+      // for FEAT
       else if (name == "ycsb") {
         fresh_db = true;
         method = &Benchmark::YCSBIntegrate;
@@ -3429,13 +3430,12 @@ class Benchmark {
       } else if (name == "ycsb_run") {
         fresh_db = false;
         method = &Benchmark::YCSBRunner;
-      }  else if (name == "bgYCSBrun") {
+      } else if (name == "bgYCSBrun") {
         num_threads++;
         fresh_db = true;
         method = &Benchmark::BGYCSBRun;
-      } 
-      
-      
+      }
+
       else if (name == "readmissing") {
         ++key_size_;
         method = &Benchmark::ReadRandom;
@@ -3578,7 +3578,7 @@ class Benchmark {
         method = &Benchmark::VerifyChecksum;
       } else if (name == "verifyfilechecksums") {
         method = &Benchmark::VerifyFileChecksums;
-#endif                             // ROCKSDB_LITE
+#endif  // ROCKSDB_LITE
       } else if (name == "readrandomoperands") {
         read_operands_ = true;
         method = &Benchmark::ReadRandom;
@@ -3793,7 +3793,7 @@ class Benchmark {
       }
     }
 
-    SetPerfLevel(static_cast<PerfLevel> (shared->perf_level));
+    SetPerfLevel(static_cast<PerfLevel>(shared->perf_level));
     perf_context.EnablePerLevelPerfContext();
     thread->stats.Start(thread->tid);
     (arg->bm->*(arg->method))(thread);
@@ -3813,35 +3813,24 @@ class Benchmark {
   }
 
   BenchSeqType GetBenchSeqType(const Slice& name) {
-    if (name == "fillseq"
-      ||name == "fillseqdeterministic"
-      ||name == "fillseekseq"
-      ||name == "fillbatch"
-      ||name == "fillseq"
-      ||name == "deleteseq") {
+    if (name == "fillseq" || name == "fillseqdeterministic" ||
+        name == "fillseekseq" || name == "fillbatch" || name == "fillseq" ||
+        name == "deleteseq") {
       return BenchSeqType::kSeq;
-    } else if (name == "fillrandom"
-               || name == "overwrite"
-               || name == "fillsync"
-               || name == "fill100K"
-               || name == "deleterandom"
-               || name == "readrandom"
-               || name == "readmissing"
-               || name == "readhot"
-               || name == "seekrandom"
-               || name == "seekrandomwhilewriting"
-               || name == "seekrandomwhilemerging"
-               || name == "readrandomwriterandom"
-               || name == "readwhilewriting"
-               || name == "revrangeww"
-               || name == "fwdrangeww"
-               || name == "mixgraph") {
+    } else if (name == "fillrandom" || name == "overwrite" ||
+               name == "fillsync" || name == "fill100K" ||
+               name == "deleterandom" || name == "readrandom" ||
+               name == "readmissing" || name == "readhot" ||
+               name == "seekrandom" || name == "seekrandomwhilewriting" ||
+               name == "seekrandomwhilemerging" ||
+               name == "readrandomwriterandom" || name == "readwhilewriting" ||
+               name == "revrangeww" || name == "fwdrangeww" ||
+               name == "mixgraph") {
       return BenchSeqType::kRandom;
     } else {
       return BenchSeqType::kSeqUnknown;
     }
   }
-
 
   Stats RunBenchmark(int n, Slice name,
                      void (Benchmark::*method)(ThreadState*)) {
@@ -3861,23 +3850,23 @@ class Benchmark {
     }
 
     std::unique_ptr<ReporterAgent> reporter_agent;
-    reporter_agent.reset(new ReporterTetris (
-        reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-        FLAGS_report_interval_seconds, 
-        GetBenchSeqType(name), StringToDistributionType(name.data())
-    )); 
+    reporter_agent.reset(new ReporterTetris(reinterpret_cast<DBImpl*>(db_.db),
+                                            FLAGS_env, FLAGS_report_file,
+                                            FLAGS_report_interval_seconds));
     // if (FLAGS_report_interval_seconds > 0) {
     //   if ( FLAGS_DOTA_enabled || FLAGS_TEA_enable ||
     //       FLAGS_FEA_enable) {
     //     // need to use another Report Agent
     //     if (FLAGS_DOTA_tuning_gap == 0) {
     //       reporter_agent.reset(new ReporterAgentWithTuning(
-    //           reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-    //           FLAGS_report_interval_seconds, FLAGS_report_interval_seconds));
+    //           reinterpret_cast<DBImpl*>(db_.db), FLAGS_env,
+    //           FLAGS_report_file, FLAGS_report_interval_seconds,
+    //           FLAGS_report_interval_seconds));
     //     } else {
     //       reporter_agent.reset(new ReporterAgentWithTuning(
-    //           reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-    //           FLAGS_report_interval_seconds, FLAGS_DOTA_tuning_gap));
+    //           reinterpret_cast<DBImpl*>(db_.db), FLAGS_env,
+    //           FLAGS_report_file, FLAGS_report_interval_seconds,
+    //           FLAGS_DOTA_tuning_gap));
     //     }
     //     auto tuner_agent =
     //         reinterpret_cast<ReporterAgentWithTuning*>(reporter_agent.get());
@@ -3901,7 +3890,6 @@ class Benchmark {
     // }
 
     ThreadArg* arg = new ThreadArg[n];
-
     for (int i = 0; i < n; i++) {
 #ifdef NUMA
       if (FLAGS_enable_numa) {
@@ -3960,7 +3948,7 @@ class Benchmark {
   template <OperationType kOpType, typename FnType, typename... Args>
   static inline void ChecksumBenchmark(FnType fn, ThreadState* thread,
                                        Args... args) {
-    const int size = FLAGS_block_size; // use --block_size option for db_bench
+    const int size = FLAGS_block_size;  // use --block_size option for db_bench
     std::string labels = "(" + std::to_string(FLAGS_block_size) + " per op)";
     const char* label = labels.c_str();
 
@@ -3999,7 +3987,7 @@ class Benchmark {
     int dummy;
     std::atomic<void*> ap(&dummy);
     int count = 0;
-    void *ptr = nullptr;
+    void* ptr = nullptr;
     thread->stats.AddMessage("(each op is 1000 loads)");
     while (count < 100000) {
       for (int i = 0; i < 1000; i++) {
@@ -4011,7 +3999,7 @@ class Benchmark {
     if (ptr == nullptr) exit(1);  // Disable unused variable warning.
   }
 
-  void Compress(ThreadState *thread) {
+  void Compress(ThreadState* thread) {
     RandomGenerator gen;
     Slice input = gen.Generate(FLAGS_block_size);
     int64_t bytes = 0;
@@ -4043,7 +4031,7 @@ class Benchmark {
     }
   }
 
-  void Uncompress(ThreadState *thread) {
+  void Uncompress(ThreadState* thread) {
     RandomGenerator gen;
     Slice input = gen.Generate(FLAGS_block_size);
     std::string compressed;
@@ -4145,7 +4133,7 @@ class Benchmark {
     options.write_buffer_size = FLAGS_write_buffer_size;
     options.max_write_buffer_number = FLAGS_max_write_buffer_number;
     options.min_write_buffer_number_to_merge =
-      FLAGS_min_write_buffer_number_to_merge;
+        FLAGS_min_write_buffer_number_to_merge;
     options.max_write_buffer_number_to_maintain =
         FLAGS_max_write_buffer_number_to_maintain;
     options.max_write_buffer_size_to_maintain =
@@ -4213,8 +4201,9 @@ class Benchmark {
     } else if ((FLAGS_prefix_size == 0) &&
                (options.memtable_factory->IsInstanceOf("prefix_hash") ||
                 options.memtable_factory->IsInstanceOf("hash_linkedlist"))) {
-      fprintf(stderr, "prefix_size should be non-zero if PrefixHash or "
-                      "HashLinkedList memtablerep is used\n");
+      fprintf(stderr,
+              "prefix_size should be non-zero if PrefixHash or "
+              "HashLinkedList memtablerep is used\n");
       exit(1);
     }
     if (FLAGS_use_plain_table) {
@@ -4255,8 +4244,8 @@ class Benchmark {
       ROCKSDB_NAMESPACE::CuckooTableOptions table_options;
       table_options.hash_table_ratio = FLAGS_cuckoo_hash_ratio;
       table_options.identity_as_first_hash = FLAGS_identity_as_first_hash;
-      options.table_factory = std::shared_ptr<TableFactory>(
-          NewCuckooTableFactory(table_options));
+      options.table_factory =
+          std::shared_ptr<TableFactory>(NewCuckooTableFactory(table_options));
 #else
       fprintf(stderr, "Cuckoo table is not supported in lite mode\n");
       exit(1);
@@ -4268,7 +4257,7 @@ class Benchmark {
       if (FLAGS_use_hash_search) {
         if (FLAGS_prefix_size == 0) {
           fprintf(stderr,
-              "prefix_size not assigned when enable use_hash_search \n");
+                  "prefix_size not assigned when enable use_hash_search \n");
           exit(1);
         }
         block_based_options.index_type = BlockBasedTableOptions::kHashSearch;
@@ -4499,13 +4488,13 @@ class Benchmark {
         exit(1);
       }
       options.max_bytes_for_level_multiplier_additional =
-        FLAGS_max_bytes_for_level_multiplier_additional_v;
+          FLAGS_max_bytes_for_level_multiplier_additional_v;
     }
     options.level0_stop_writes_trigger = FLAGS_level0_stop_writes_trigger;
     options.level0_file_num_compaction_trigger =
         FLAGS_level0_file_num_compaction_trigger;
     options.level0_slowdown_writes_trigger =
-      FLAGS_level0_slowdown_writes_trigger;
+        FLAGS_level0_slowdown_writes_trigger;
     options.compression = FLAGS_compression_type_e;
     if (FLAGS_simulate_hybrid_fs_file != "") {
       options.bottommost_temperature = Temperature::kWarm;
@@ -4523,8 +4512,7 @@ class Benchmark {
       for (int i = 0; i < FLAGS_min_level_to_compress; i++) {
         options.compression_per_level[i] = kNoCompression;
       }
-      for (int i = FLAGS_min_level_to_compress;
-           i < FLAGS_num_levels; i++) {
+      for (int i = FLAGS_min_level_to_compress; i < FLAGS_num_levels; i++) {
         options.compression_per_level[i] = FLAGS_compression_type_e;
       }
     }
@@ -4578,23 +4566,23 @@ class Benchmark {
     // set universal style compaction configurations, if applicable
     if (FLAGS_universal_size_ratio != 0) {
       options.compaction_options_universal.size_ratio =
-        FLAGS_universal_size_ratio;
+          FLAGS_universal_size_ratio;
     }
     if (FLAGS_universal_min_merge_width != 0) {
       options.compaction_options_universal.min_merge_width =
-        FLAGS_universal_min_merge_width;
+          FLAGS_universal_min_merge_width;
     }
     if (FLAGS_universal_max_merge_width != 0) {
       options.compaction_options_universal.max_merge_width =
-        FLAGS_universal_max_merge_width;
+          FLAGS_universal_max_merge_width;
     }
     if (FLAGS_universal_max_size_amplification_percent != 0) {
       options.compaction_options_universal.max_size_amplification_percent =
-        FLAGS_universal_max_size_amplification_percent;
+          FLAGS_universal_max_size_amplification_percent;
     }
     if (FLAGS_universal_compression_size_percent != -1) {
       options.compaction_options_universal.compression_size_percent =
-        FLAGS_universal_compression_size_percent;
+          FLAGS_universal_compression_size_percent;
     }
     options.compaction_options_universal.allow_trivial_move =
         FLAGS_universal_allow_trivial_move;
@@ -4662,7 +4650,6 @@ class Benchmark {
 
     options.core_number = FLAGS_core_num;
     options.max_memtable_size = FLAGS_max_memtable_size;
-
 
     if (options.statistics == nullptr) {
       options.statistics = dbstats;
@@ -4788,7 +4775,7 @@ class Benchmark {
   }
 
   void OpenDb(Options options, const std::string& db_name,
-      DBWithColumnFamilies* db) {
+              DBWithColumnFamilies* db) {
     uint64_t open_start = FLAGS_report_open_timing ? FLAGS_env->NowNanos() : 0;
     Status s;
     // Open with column families if necessary.
@@ -4803,7 +4790,7 @@ class Benchmark {
       std::vector<ColumnFamilyDescriptor> column_families;
       for (size_t i = 0; i < num_hot; i++) {
         column_families.push_back(ColumnFamilyDescriptor(
-              ColumnFamilyName(i), ColumnFamilyOptions(options)));
+            ColumnFamilyName(i), ColumnFamilyOptions(options)));
       }
       std::vector<int> cfh_idx_to_prob;
       if (!FLAGS_column_family_distribution.empty()) {
@@ -4829,8 +4816,8 @@ class Benchmark {
       }
 #ifndef ROCKSDB_LITE
       if (FLAGS_readonly) {
-        s = DB::OpenForReadOnly(options, db_name, column_families,
-            &db->cfh, &db->db);
+        s = DB::OpenForReadOnly(options, db_name, column_families, &db->cfh,
+                                &db->db);
       } else if (FLAGS_optimistic_transaction_db) {
         s = OptimisticTransactionDB::Open(options, db_name, column_families,
                                           &db->cfh, &db->opt_txn_db);
@@ -4941,9 +4928,7 @@ class Benchmark {
     }
   }
 
-  enum WriteMode {
-    RANDOM, SEQUENTIAL, UNIQUE_RANDOM
-  };
+  enum WriteMode { RANDOM, SEQUENTIAL, UNIQUE_RANDOM };
 
   void WriteSeqDeterministic(ThreadState* thread) {
     DoDeterministicCompact(thread, open_options_.compaction_style, SEQUENTIAL);
@@ -4954,13 +4939,9 @@ class Benchmark {
                            UNIQUE_RANDOM);
   }
 
-  void WriteSeq(ThreadState* thread) {
-    DoWrite(thread, SEQUENTIAL);
-  }
+  void WriteSeq(ThreadState* thread) { DoWrite(thread, SEQUENTIAL); }
 
-  void WriteRandom(ThreadState* thread) {
-    DoWrite(thread, RANDOM);
-  }
+  void WriteRandom(ThreadState* thread) { DoWrite(thread, RANDOM); }
 
   void WriteUniqueRandom(ThreadState* thread) {
     DoWrite(thread, UNIQUE_RANDOM);
@@ -4973,7 +4954,8 @@ class Benchmark {
     int64_t ops_per_stage = 1;
 
     // load first, then run
-    Duration loading_duration(FLAGS_load_duration, remain_loading, ops_per_stage);
+    Duration loading_duration(FLAGS_load_duration, remain_loading,
+                              ops_per_stage);
     Duration running_duration(test_duration, remain_running, ops_per_stage);
     int stage = 0;
     //    WriteBatch batch;
@@ -5012,7 +4994,9 @@ class Benchmark {
               RateLimiter::OpType::kWrite);
           thread->stats.ResetLastOpTime();
         }
-        thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite);
+        Slice s_key(key);
+        thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite,
+                                  &s_key, &val);
       }
       thread->stats.AddBytes(bytes);
     }
@@ -5047,19 +5031,26 @@ class Benchmark {
               bytes += key.size() + data.size();
             }
             read_count++;
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kRead);
+            Slice s_key(key);
+            Slice s_val(data);
+            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kRead,
+                                      &s_key, &s_val);
           } break;
           case ycsbc::UPDATE: {
             Slice val = gen.Generate();
             // In rocksdb, update is just another put operation.
             op_status = db_.db->Put(w_op, key, val);
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kUpdate);
+            Slice s_key(key);
+            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kUpdate,
+                                      &s_key, &val);
           } break;
           case ycsbc::INSERT: {
             Slice val = gen.Generate();
             // In rocksdb, update is just another put operation.
             op_status = db_.db->Put(w_op, key, val);
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite);
+            Slice s_key(key);
+            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kWrite,
+                                      &s_key, &val);
           } break;
           case ycsbc::SCAN: {
             Iterator* db_iter = db_.db->NewIterator(rocksdb::ReadOptions());
@@ -5069,6 +5060,7 @@ class Benchmark {
               data = db_iter->value().ToString();
               db_iter->Next();
             }
+            // TODO
             thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kSeek);
             delete db_iter;
           } break;
@@ -5080,19 +5072,24 @@ class Benchmark {
             }
             Slice val = gen.Generate();
             op_status = db_.db->Put(w_op, key, val);
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kUpdate);
+            Slice s_key(key);
+            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kUpdate,
+                                      &s_key, &val);
           } break;
           case ycsbc::DELETE: {
             op_status = db_.db->Delete(w_op, key);
-            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kDelete);
+            Slice s_key(key);
+            thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kDelete,
+                                      &s_key, nullptr);
           } break;
           case ycsbc::MAXOPTYPE:
             throw ycsbc::utils::Exception(
                 "Operation request is not recognized!");
         }
-      thread->stats.AddBytes(bytes);
+        thread->stats.AddBytes(bytes);
       }
-    std::cout << "found count / read count " << found_count << " / " << read_count << std::endl;
+      std::cout << "found count / read count " << found_count << " / "
+                << read_count << std::endl;
     }
   }
 
@@ -5126,335 +5123,367 @@ class Benchmark {
     InitWorkload(wl, props);
     YCSBWorking(thread, &wl, true, true);
   }
-const double bandwidth_in_one_hour[3600] = {
-    100.0, 28.43, 38.89, 48.66, 35.25, 49.34, 35.7,  31.31, 28.79, 32.26, 34.2,
-    28.92, 22.36, 30.46, 34.89, 35.84, 27.15, 40.16, 39.34, 29.02, 30.82, 34.69,
-    26.3,  30.2,  29.93, 33.11, 44.1,  39.15, 41.05, 35.48, 34.03, 34.49, 41.11,
-    30.46, 34.92, 40.59, 35.74, 26.36, 58.23, 34.36, 32.52, 36.1,  55.05, 42.1,
-    39.8,  40.62, 43.48, 39.15, 45.34, 43.87, 41.11, 39.97, 38.1,  66.95, 46.07,
-    40.1,  29.67, 38.89, 38.95, 46.23, 35.67, 36.79, 35.18, 34.49, 35.8,  27.9,
-    39.08, 44.36, 47.21, 32.43, 40.26, 35.7,  46.43, 41.67, 48.82, 39.9,  32.92,
-    43.21, 40.92, 41.84, 39.08, 42.49, 43.7,  45.97, 45.41, 44.1,  38.85, 36.79,
-    41.8,  42.13, 32.39, 45.51, 31.34, 37.57, 28.89, 30.62, 34.72, 29.77, 34.69,
-    29.34, 29.64, 37.97, 36.59, 30.85, 31.15, 38.2,  31.67, 30.39, 26.03, 25.34,
-    24.95, 27.61, 35.87, 31.97, 34.66, 36.43, 30.52, 34.79, 41.34, 39.64, 44.66,
-    45.15, 38.0,  40.07, 38.92, 42.62, 40.07, 30.89, 43.84, 34.26, 30.56, 35.25,
-    33.67, 46.79, 48.2,  36.85, 34.59, 51.8,  42.62, 39.48, 37.15, 45.02, 38.23,
-    43.9,  36.62, 32.2,  39.25, 41.67, 45.05, 49.84, 41.61, 36.26, 31.54, 34.16,
-    40.69, 32.92, 33.05, 35.48, 44.03, 46.92, 36.66, 45.8,  42.43, 42.66, 41.97,
-    51.34, 42.56, 31.28, 36.16, 43.21, 43.15, 38.16, 49.87, 40.59, 44.23, 43.67,
-    52.33, 41.31, 41.48, 46.07, 39.18, 38.0,  35.34, 41.67, 40.62, 41.87, 35.41,
-    35.18, 35.57, 33.08, 31.25, 31.77, 25.77, 30.62, 30.2,  30.36, 33.05, 33.9,
-    32.69, 36.46, 29.9,  37.48, 37.7,  33.57, 36.03, 31.15, 37.05, 45.31, 44.59,
-    60.03, 36.69, 42.13, 43.11, 40.07, 46.33, 46.59, 39.48, 46.92, 42.36, 42.59,
-    38.82, 41.97, 49.21, 45.28, 48.56, 43.9,  44.79, 41.74, 37.48, 42.72, 33.87,
-    57.15, 39.84, 36.03, 37.05, 35.51, 32.56, 35.25, 40.0,  31.57, 33.21, 30.33,
-    31.9,  43.28, 49.54, 54.82, 52.26, 42.62, 42.72, 45.84, 41.67, 55.05, 53.67,
-    44.23, 47.34, 47.64, 37.15, 41.77, 47.93, 37.97, 38.13, 40.3,  45.44, 45.02,
-    40.52, 46.62, 39.64, 48.66, 41.54, 91.11, 33.93, 34.03, 37.7,  35.87, 38.62,
-    39.64, 40.07, 39.54, 38.62, 42.85, 56.98, 41.93, 44.23, 39.74, 46.66, 57.11,
-    41.8,  38.0,  36.85, 57.38, 55.15, 53.9,  47.9,  38.89, 45.31, 44.0,  38.0,
-    32.39, 48.1,  29.84, 36.66, 33.44, 36.75, 38.75, 42.0,  41.15, 45.51, 38.36,
-    34.16, 37.41, 36.69, 37.67, 44.36, 37.28, 39.61, 39.44, 21.93, 42.36, 33.84,
-    39.54, 30.43, 34.82, 28.43, 27.93, 32.2,  33.34, 46.69, 35.9,  34.2,  28.16,
-    32.75, 36.75, 32.98, 38.26, 40.36, 40.2,  41.7,  49.08, 38.79, 39.67, 39.87,
-    37.64, 32.85, 33.84, 37.54, 50.33, 36.98, 46.3,  41.11, 40.39, 43.48, 39.97,
-    41.31, 46.85, 37.21, 38.66, 37.7,  41.18, 28.33, 33.44, 25.57, 28.07, 28.1,
-    29.15, 29.84, 29.7,  32.43, 35.28, 31.11, 32.0,  33.08, 37.15, 39.51, 37.08,
-    41.9,  38.75, 34.66, 36.1,  38.46, 49.28, 50.16, 46.03, 38.49, 41.54, 46.23,
-    54.89, 53.31, 44.85, 42.49, 41.44, 39.87, 43.77, 36.62, 43.11, 44.3,  37.28,
-    41.25, 42.72, 36.3,  32.36, 35.77, 33.93, 39.97, 31.11, 37.93, 45.31, 40.98,
-    40.56, 46.43, 40.79, 42.26, 36.23, 43.57, 45.57, 44.75, 44.2,  37.15, 55.77,
-    38.75, 36.3,  45.93, 39.9,  40.95, 49.41, 41.64, 42.89, 50.3,  46.43, 44.95,
-    41.18, 42.98, 43.48, 45.38, 44.85, 48.33, 53.02, 45.15, 50.03, 41.8,  42.82,
-    40.33, 31.9,  34.46, 27.61, 28.3,  33.11, 35.41, 38.43, 33.8,  29.9,  50.0,
-    46.79, 47.38, 57.77, 45.7,  56.95, 49.67, 45.05, 55.44, 42.16, 53.51, 47.54,
-    53.02, 53.48, 49.64, 49.18, 54.59, 57.08, 50.3,  56.3,  50.03, 57.21, 56.62,
-    51.8,  44.03, 52.69, 40.66, 54.07, 55.84, 58.66, 42.13, 50.52, 38.49, 42.43,
-    82.69, 41.48, 39.64, 41.18, 50.0,  44.52, 43.44, 46.98, 41.74, 42.3,  39.15,
-    38.36, 43.57, 41.05, 37.7,  45.08, 49.74, 43.57, 41.51, 40.69, 44.79, 40.62,
-    47.34, 39.15, 37.41, 40.69, 41.25, 44.69, 36.89, 43.93, 41.15, 42.69, 42.23,
-    36.2,  34.56, 32.33, 42.62, 52.16, 36.75, 36.33, 43.44, 44.16, 42.23, 46.59,
-    39.25, 44.56, 36.13, 37.9,  36.95, 41.7,  42.92, 50.23, 39.11, 42.23, 37.57,
-    34.26, 36.75, 34.92, 37.87, 46.26, 42.52, 49.21, 43.21, 38.03, 57.84, 42.46,
-    39.34, 36.62, 41.21, 46.66, 52.98, 71.05, 55.25, 45.28, 48.1,  48.66, 60.2,
-    44.95, 46.62, 43.87, 53.21, 43.93, 45.08, 52.3,  43.48, 49.67, 43.8,  45.18,
-    43.11, 54.56, 40.26, 38.59, 36.79, 42.72, 37.38, 45.48, 43.31, 48.89, 44.1,
-    44.49, 49.38, 42.49, 48.52, 44.89, 45.87, 39.25, 51.57, 39.54, 41.84, 45.15,
-    49.77, 41.48, 41.97, 42.56, 34.52, 43.54, 38.85, 38.79, 37.64, 43.44, 42.0,
-    48.03, 46.39, 46.62, 41.9,  34.43, 49.11, 41.25, 43.08, 37.28, 36.26, 35.87,
-    26.52, 32.56, 33.97, 29.84, 45.87, 46.2,  42.98, 47.25, 44.49, 44.16, 49.34,
-    55.67, 45.67, 44.13, 48.95, 48.59, 50.75, 43.28, 51.67, 44.03, 36.75, 45.02,
-    37.84, 50.1,  34.3,  37.48, 38.39, 40.59, 37.93, 41.41, 34.07, 39.97, 41.87,
-    38.72, 31.21, 35.61, 42.52, 34.46, 66.92, 59.08, 42.56, 42.07, 37.38, 40.89,
-    40.36, 40.46, 38.33, 59.25, 46.62, 39.31, 44.0,  64.46, 47.8,  50.75, 40.75,
-    51.9,  47.41, 45.28, 51.84, 42.72, 42.03, 38.1,  41.08, 45.41, 41.87, 48.49,
-    43.93, 46.16, 52.23, 45.38, 50.3,  42.52, 52.92, 46.0,  49.61, 50.85, 73.61,
-    51.61, 44.46, 46.0,  79.11, 47.05, 57.7,  43.57, 39.05, 36.95, 31.9,  36.49,
-    34.95, 38.03, 40.26, 37.67, 41.61, 38.95, 41.84, 42.26, 38.07, 28.1,  29.57,
-    34.75, 34.82, 36.59, 34.85, 37.51, 35.9,  37.97, 47.97, 37.15, 31.93, 37.54,
-    32.75, 31.8,  34.07, 45.41, 42.49, 31.28, 32.39, 29.21, 34.46, 37.34, 34.13,
-    32.66, 34.3,  35.02, 41.05, 36.89, 46.2,  40.39, 46.07, 35.34, 42.33, 55.87,
-    45.9,  44.39, 43.7,  38.82, 46.79, 46.23, 100.0, 46.52, 50.0,  47.74, 47.61,
-    45.48, 44.69, 49.54, 48.39, 35.64, 40.39, 43.67, 46.95, 45.67, 45.21, 46.59,
-    42.92, 42.0,  39.28, 37.97, 40.16, 52.43, 49.54, 43.67, 44.95, 40.75, 40.13,
-    38.75, 39.64, 46.49, 46.13, 54.95, 39.51, 43.93, 50.23, 50.0,  50.07, 39.77,
-    65.93, 49.7,  45.15, 44.23, 44.98, 53.51, 46.33, 48.52, 57.02, 49.25, 46.56,
-    50.79, 53.93, 50.07, 44.79, 44.89, 40.72, 47.41, 46.07, 51.67, 38.72, 40.13,
-    41.34, 36.92, 38.72, 49.25, 45.31, 36.0,  48.07, 38.92, 40.07, 42.36, 40.36,
-    38.2,  43.34, 41.9,  33.54, 41.28, 37.8,  41.57, 37.51, 40.2,  41.31, 45.57,
-    33.54, 48.2,  38.95, 39.74, 36.07, 42.13, 39.51, 43.02, 37.97, 43.31, 41.31,
-    42.92, 42.03, 35.61, 31.77, 34.0,  34.39, 31.57, 32.82, 58.07, 41.21, 36.95,
-    41.25, 39.51, 36.07, 40.2,  42.98, 38.0,  34.3,  39.34, 42.1,  41.08, 44.46,
-    36.1,  40.13, 46.26, 53.8,  38.07, 41.61, 43.93, 42.82, 40.95, 46.98, 38.98,
-    44.46, 46.62, 52.98, 50.3,  49.87, 49.57, 45.28, 41.48, 43.02, 42.49, 45.18,
-    50.98, 53.08, 46.3,  48.69, 43.51, 45.61, 50.26, 54.82, 48.1,  44.2,  47.9,
-    46.66, 51.77, 53.48, 47.84, 41.08, 48.46, 40.62, 47.9,  87.84, 50.23, 38.1,
-    43.28, 46.69, 35.7,  44.66, 37.18, 36.52, 44.98, 44.75, 47.57, 43.61, 36.95,
-    39.74, 30.39, 31.8,  48.52, 30.33, 40.3,  36.33, 40.56, 41.11, 40.49, 45.54,
-    35.25, 44.3,  37.64, 35.31, 41.34, 42.62, 35.44, 35.11, 34.07, 34.89, 40.49,
-    33.67, 38.1,  31.34, 36.33, 36.85, 33.25, 41.15, 37.8,  37.77, 32.36, 36.98,
-    30.85, 46.72, 41.28, 48.89, 41.02, 38.72, 42.39, 44.36, 46.13, 48.23, 39.34,
-    50.92, 49.74, 47.02, 48.0,  55.74, 57.11, 54.0,  50.72, 46.49, 51.57, 55.18,
-    52.0,  48.33, 59.21, 58.95, 54.89, 53.15, 59.28, 39.8,  47.25, 47.08, 45.18,
-    52.43, 44.39, 51.64, 50.0,  39.08, 48.43, 48.0,  45.08, 39.77, 39.41, 43.08,
-    46.95, 48.39, 43.02, 41.97, 42.92, 39.08, 47.64, 44.49, 43.28, 48.36, 36.56,
-    41.77, 34.33, 42.46, 42.85, 44.26, 44.03, 43.21, 41.41, 43.15, 45.28, 57.41,
-    39.18, 45.77, 55.02, 48.66, 41.34, 39.15, 40.62, 39.51, 46.1,  70.92, 32.36,
-    36.1,  33.28, 40.3,  34.72, 36.95, 34.79, 37.05, 37.48, 40.23, 32.56, 41.74,
-    30.62, 42.36, 38.07, 43.51, 40.46, 40.03, 38.85, 42.46, 36.72, 80.52, 40.82,
-    42.72, 43.64, 48.26, 44.98, 43.97, 43.51, 54.43, 64.56, 49.97, 49.18, 39.64,
-    37.57, 41.61, 40.62, 42.16, 33.48, 42.56, 41.77, 48.46, 43.44, 37.11, 41.08,
-    40.89, 48.36, 39.97, 36.0,  34.92, 38.95, 34.23, 37.51, 37.44, 36.1,  47.15,
-    50.82, 46.1,  36.95, 36.56, 45.05, 41.9,  44.36, 49.44, 37.25, 41.77, 42.59,
-    44.1,  43.48, 42.26, 43.18, 34.3,  45.77, 33.67, 32.23, 40.43, 39.54, 37.64,
-    36.43, 44.46, 34.59, 39.61, 33.87, 45.74, 38.07, 37.61, 42.59, 33.87, 43.34,
-    37.25, 38.07, 39.48, 34.23, 38.1,  36.89, 45.51, 37.34, 36.07, 37.44, 37.28,
-    41.7,  43.28, 37.05, 43.7,  47.7,  41.54, 45.54, 44.36, 50.03, 40.52, 33.38,
-    44.03, 35.38, 39.51, 33.34, 30.46, 33.31, 29.9,  32.43, 27.41, 38.85, 28.46,
-    41.93, 35.64, 69.51, 39.61, 39.77, 37.18, 41.51, 39.48, 39.61, 40.46, 40.69,
-    37.15, 36.03, 51.67, 49.08, 48.92, 40.89, 54.56, 51.34, 57.84, 57.64, 53.57,
-    44.85, 42.0,  44.75, 47.7,  48.52, 39.87, 41.25, 40.13, 36.03, 40.1,  41.54,
-    42.0,  41.08, 40.75, 37.41, 41.51, 47.31, 39.9,  33.34, 40.3,  43.18, 51.21,
-    30.07, 42.13, 36.07, 33.31, 43.28, 39.97, 37.11, 45.21, 40.43, 38.66, 36.3,
-    45.34, 37.25, 33.08, 45.18, 37.9,  38.33, 52.69, 41.64, 46.36, 38.13, 39.64,
-    41.11, 38.72, 37.41, 41.05, 53.28, 36.62, 34.66, 35.57, 40.59, 36.49, 52.03,
-    37.25, 40.52, 41.34, 43.51, 45.84, 48.46, 52.23, 40.66, 36.23, 36.98, 48.23,
-    37.31, 32.56, 40.26, 36.07, 36.16, 31.34, 38.23, 32.52, 32.59, 34.1,  37.84,
-    33.74, 33.84, 31.61, 34.52, 32.0,  36.1,  38.98, 29.51, 34.52, 35.48, 32.72,
-    41.84, 43.97, 39.77, 38.59, 40.69, 36.49, 36.52, 38.03, 53.11, 56.69, 47.25,
-    44.49, 41.18, 48.0,  49.38, 50.79, 45.02, 55.67, 42.92, 44.13, 46.23, 43.38,
-    45.93, 47.48, 49.54, 47.05, 42.62, 93.97, 43.02, 36.72, 29.54, 35.8,  40.85,
-    36.43, 36.07, 41.84, 36.03, 48.39, 35.57, 44.26, 36.36, 44.56, 56.46, 32.85,
-    46.36, 43.61, 43.31, 37.02, 38.95, 39.9,  45.21, 42.82, 48.03, 44.36, 50.59,
-    50.43, 44.85, 39.9,  50.46, 48.89, 53.25, 43.15, 43.74, 44.1,  41.84, 43.18,
-    39.8,  37.84, 35.61, 32.23, 35.54, 35.18, 35.05, 41.05, 39.38, 34.0,  33.67,
-    39.05, 38.43, 36.43, 31.54, 42.39, 34.52, 38.72, 46.39, 41.77, 40.3,  39.15,
-    32.13, 43.51, 33.31, 38.79, 37.87, 35.34, 35.57, 33.84, 41.57, 27.93, 26.75,
-    17.67, 25.51, 30.16, 26.13, 35.9,  27.51, 26.33, 34.66, 26.26, 23.25, 30.07,
-    38.43, 22.39, 32.49, 28.98, 28.75, 39.51, 40.07, 37.51, 68.26, 36.16, 35.21,
-    37.77, 43.57, 31.84, 30.66, 37.38, 32.52, 32.13, 33.28, 45.7,  40.23, 40.98,
-    31.7,  30.66, 34.56, 33.28, 33.8,  31.21, 32.43, 27.31, 30.69, 36.85, 41.64,
-    45.18, 39.84, 40.59, 38.36, 35.02, 35.25, 29.9,  32.98, 31.74, 30.62, 32.39,
-    29.21, 26.89, 27.57, 28.82, 28.43, 31.15, 39.15, 30.79, 44.03, 29.38, 38.43,
-    39.41, 36.66, 41.84, 38.39, 72.43, 32.72, 38.2,  34.56, 28.39, 33.44, 37.44,
-    36.66, 33.11, 28.62, 31.87, 33.11, 39.18, 35.77, 33.64, 30.39, 28.39, 29.21,
-    32.23, 34.07, 28.23, 32.46, 26.13, 21.7,  23.08, 26.79, 31.93, 28.39, 29.25,
-    28.1,  32.13, 33.25, 35.48, 49.11, 34.33, 30.59, 28.98, 33.08, 34.26, 28.1,
-    27.61, 31.74, 27.87, 30.56, 32.0,  42.79, 32.82, 42.16, 41.77, 34.43, 30.26,
-    25.28, 34.36, 30.59, 30.13, 24.59, 33.31, 38.43, 36.98, 34.92, 32.39, 34.16,
-    37.25, 30.79, 33.64, 36.03, 38.52, 31.28, 30.89, 35.67, 23.48, 32.3,  27.64,
-    34.13, 27.21, 31.48, 27.18, 33.34, 31.21, 28.79, 34.36, 38.66, 48.66, 34.46,
-    42.16, 32.72, 30.26, 33.21, 25.97, 31.57, 37.8,  32.66, 36.2,  42.23, 34.36,
-    37.93, 29.77, 27.34, 26.79, 30.59, 32.62, 28.69, 37.74, 37.18, 33.51, 59.77,
-    30.23, 29.77, 31.97, 42.95, 39.97, 38.89, 28.72, 30.03, 30.2,  33.18, 30.75,
-    35.34, 33.15, 37.15, 34.95, 34.75, 30.36, 35.84, 28.85, 25.11, 27.02, 28.56,
-    23.8,  28.39, 23.87, 24.49, 24.82, 25.9,  27.93, 26.1,  24.13, 22.49, 31.54,
-    26.52, 30.1,  33.21, 23.97, 33.25, 35.15, 29.54, 28.79, 33.64, 31.25, 32.03,
-    39.57, 27.41, 31.11, 29.9,  29.74, 43.25, 44.46, 43.48, 42.1,  38.33, 36.79,
-    34.52, 40.26, 39.25, 38.33, 29.21, 30.75, 34.66, 34.39, 45.18, 46.95, 42.2,
-    51.25, 36.79, 47.87, 45.61, 40.03, 50.1,  42.13, 32.3,  36.03, 38.13, 43.44,
-    36.43, 26.59, 40.85, 35.51, 30.85, 36.75, 28.75, 30.36, 29.57, 33.05, 31.08,
-    33.34, 36.89, 37.57, 34.69, 33.25, 37.74, 37.93, 39.31, 36.36, 34.95, 36.95,
-    35.61, 40.52, 35.18, 33.84, 34.49, 31.97, 32.56, 40.72, 30.89, 37.48, 34.72,
-    33.51, 35.18, 38.92, 38.3,  32.92, 33.18, 33.28, 36.33, 40.1,  41.25, 37.38,
-    36.03, 40.49, 36.79, 43.34, 34.56, 44.89, 33.18, 42.66, 28.92, 30.95, 35.77,
-    50.16, 31.93, 28.85, 27.51, 26.95, 23.61, 20.82, 21.54, 20.98, 21.31, 31.28,
-    29.84, 28.72, 31.21, 27.8,  41.41, 45.87, 31.57, 54.66, 54.95, 40.62, 47.38,
-    45.51, 36.26, 44.23, 32.92, 32.52, 37.61, 38.92, 39.48, 33.34, 43.02, 31.64,
-    33.64, 37.8,  32.07, 35.97, 31.8,  39.74, 34.98, 36.59, 34.23, 32.92, 35.57,
-    39.21, 34.39, 35.84, 33.77, 44.56, 40.82, 44.69, 34.07, 39.21, 37.93, 37.08,
-    32.52, 40.43, 31.57, 34.82, 39.44, 33.54, 41.05, 39.9,  35.74, 40.43, 33.84,
-    39.87, 37.34, 39.02, 36.2,  32.49, 39.44, 33.21, 36.33, 28.92, 42.72, 33.77,
-    36.26, 30.2,  33.38, 32.75, 95.44, 50.95, 27.97, 31.57, 33.77, 43.25, 40.72,
-    38.3,  37.8,  42.3,  34.56, 38.36, 44.66, 31.31, 28.72, 36.62, 43.38, 29.61,
-    32.95, 33.8,  34.23, 36.85, 31.31, 36.03, 34.1,  24.52, 27.21, 34.36, 35.41,
-    36.1,  27.9,  27.54, 31.38, 33.18, 36.75, 37.15, 37.11, 35.31, 37.02, 42.72,
-    38.69, 35.08, 31.77, 26.56, 32.0,  32.07, 33.11, 28.62, 26.39, 29.38, 34.3,
-    26.72, 32.33, 21.44, 36.07, 38.56, 36.39, 32.23, 37.7,  27.11, 41.38, 39.11,
-    33.8,  33.64, 37.64, 30.72, 38.92, 38.43, 35.54, 33.84, 33.74, 36.69, 40.82,
-    36.46, 34.72, 39.48, 40.72, 37.18, 36.43, 35.77, 44.03, 44.72, 46.26, 51.54,
-    45.34, 38.39, 34.52, 31.87, 32.46, 33.51, 33.34, 36.69, 28.52, 37.7,  37.74,
-    30.66, 30.72, 36.72, 32.82, 38.46, 31.28, 42.69, 40.75, 39.67, 41.41, 38.95,
-    35.18, 33.93, 31.77, 32.59, 27.7,  32.89, 30.26, 29.05, 25.77, 30.2,  35.57,
-    28.13, 25.7,  28.52, 36.75, 41.8,  34.59, 28.59, 26.89, 44.13, 32.36, 30.62,
-    28.07, 34.16, 35.11, 30.56, 31.25, 27.08, 31.44, 32.0,  31.97, 39.02, 41.18,
-    36.23, 43.54, 40.03, 36.33, 33.84, 40.23, 42.62, 48.33, 38.59, 44.69, 44.16,
-    36.26, 31.51, 47.48, 44.85, 41.9,  74.3,  33.9,  33.25, 30.89, 31.25, 38.82,
-    37.87, 35.15, 44.82, 38.49, 41.67, 45.51, 33.74, 38.03, 34.03, 38.43, 29.08,
-    33.34, 42.46, 39.57, 37.57, 35.8,  37.25, 38.3,  34.23, 35.28, 34.92, 43.38,
-    39.38, 38.03, 39.02, 43.84, 40.39, 39.51, 43.97, 41.77, 37.44, 39.34, 38.3,
-    35.31, 34.3,  42.0,  32.89, 29.97, 31.77, 38.59, 47.84, 31.93, 38.3,  33.41,
-    27.51, 26.85, 24.66, 37.77, 22.89, 28.79, 29.38, 29.18, 30.52, 27.57, 30.69,
-    31.8,  38.03, 45.08, 30.3,  40.52, 40.07, 27.74, 28.72, 32.26, 33.08, 25.05,
-    25.54, 28.82, 34.03, 32.95, 30.2,  32.66, 34.26, 39.54, 37.9,  35.84, 35.97,
-    31.64, 30.72, 33.57, 34.46, 35.74, 30.92, 32.66, 33.8,  38.33, 50.89, 36.95,
-    36.1,  33.31, 33.8,  31.67, 26.72, 32.33, 36.36, 32.07, 22.59, 26.79, 31.08,
-    35.64, 30.36, 37.28, 41.11, 36.0,  36.69, 40.49, 37.15, 36.03, 42.66, 39.8,
-    41.7,  40.75, 34.36, 37.25, 40.03, 43.77, 40.49, 37.54, 40.16, 38.13, 50.82,
-    40.43, 43.87, 41.15, 43.05, 43.57, 35.57, 37.87, 36.03, 53.64, 30.75, 41.74,
-    34.36, 39.57, 31.02, 34.95, 42.43, 42.49, 31.9,  36.75, 35.25, 33.97, 33.9,
-    31.84, 37.18, 31.97, 28.43, 33.25, 31.77, 34.75, 30.95, 37.18, 34.98, 30.07,
-    31.05, 31.41, 49.51, 38.72, 37.18, 34.3,  34.07, 29.93, 39.51, 32.49, 38.52,
-    31.7,  38.56, 31.08, 35.21, 28.2,  32.07, 40.46, 34.33, 33.34, 33.87, 32.26,
-    30.16, 28.85, 27.64, 27.77, 25.93, 32.85, 26.59, 28.95, 34.36, 39.48, 28.75,
-    33.84, 42.3,  41.48, 52.23, 44.0,  52.89, 49.48, 55.02, 50.26, 44.39, 51.05,
-    44.03, 45.05, 46.43, 41.54, 40.92, 37.34, 40.56, 44.66, 44.75, 38.3,  44.03,
-    49.64, 52.1,  55.05, 44.2,  44.75, 53.97, 40.89, 37.8,  74.82, 38.16, 42.95,
-    39.54, 41.64, 36.95, 43.67, 41.21, 38.72, 37.8,  39.18, 37.41, 45.21, 43.54,
-    45.28, 52.2,  38.52, 50.59, 43.31, 45.61, 38.92, 47.87, 37.44, 49.61, 53.48,
-    47.64, 49.34, 43.84, 43.93, 46.89, 44.13, 47.67, 40.69, 49.08, 37.05, 40.69,
-    42.56, 42.95, 37.48, 35.67, 47.9,  37.7,  28.69, 30.33, 35.8,  44.79, 45.64,
-    46.2,  45.38, 40.56, 33.57, 35.11, 32.72, 34.2,  38.33, 39.31, 35.41, 41.77,
-    37.18, 55.97, 38.16, 33.54, 38.23, 34.2,  34.16, 31.54, 38.75, 39.28, 42.33,
-    39.7,  42.85, 37.87, 39.21, 42.36, 42.62, 35.51, 42.59, 46.92, 41.77, 42.23,
-    40.36, 52.03, 46.49, 39.38, 31.93, 31.77, 30.52, 33.61, 39.25, 30.62, 29.77,
-    36.95, 35.25, 35.57, 38.1,  39.44, 35.25, 39.05, 54.36, 35.34, 36.69, 42.16,
-    40.3,  40.52, 40.1,  38.72, 47.77, 41.8,  39.28, 43.74, 38.23, 39.8,  42.33,
-    45.21, 38.95, 47.18, 38.23, 36.75, 39.38, 38.3,  41.74, 39.97, 39.21, 42.59,
-    37.93, 41.28, 40.59, 38.43, 38.43, 37.31, 37.97, 36.36, 31.84, 30.66, 28.82,
-    29.02, 27.34, 29.48, 27.08, 30.98, 28.1,  28.46, 29.18, 31.84, 34.98, 34.62,
-    26.92, 31.44, 40.72, 29.18, 35.77, 33.97, 46.13, 51.57, 38.46, 35.48, 49.05,
-    39.61, 32.3,  35.97, 37.9,  35.9,  41.38, 35.87, 33.57, 36.33, 31.7,  32.16,
-    37.48, 40.26, 32.26, 28.69, 37.57, 31.64, 31.93, 53.15, 30.72, 32.07, 30.79,
-    38.03, 36.56, 41.97, 41.28, 37.02, 37.87, 37.05, 45.77, 54.46, 43.61, 47.74,
-    42.75, 52.03, 43.54, 37.84, 46.98, 42.26, 38.69, 40.43, 49.44, 36.49, 38.13,
-    36.95, 35.34, 35.21, 38.98, 43.84, 36.2,  42.33, 29.18, 37.44, 38.69, 35.18,
-    35.34, 34.69, 35.74, 34.13, 31.54, 36.3,  31.41, 32.52, 37.05, 34.16, 36.95,
-    38.59, 41.18, 37.48, 46.03, 31.57, 32.59, 30.26, 34.52, 35.54, 38.92, 40.0,
-    50.62, 40.0,  59.64, 48.43, 48.3,  34.39, 37.54, 32.69, 31.67, 32.0,  33.31,
-    47.48, 31.41, 35.11, 32.62, 34.46, 31.77, 38.66, 31.18, 39.9,  33.9,  32.03,
-    28.3,  29.08, 35.41, 42.75, 45.41, 44.07, 39.11, 29.38, 38.26, 37.34, 33.25,
-    35.61, 38.03, 34.56, 35.97, 40.95, 46.03, 43.51, 32.3,  44.75, 49.93, 50.33,
-    35.84, 41.25, 42.13, 40.23, 46.0,  33.93, 39.97, 37.38, 36.0,  36.82, 36.75,
-    37.41, 33.64, 43.67, 35.02, 40.16, 31.54, 33.41, 39.41, 34.95, 28.56, 35.51,
-    34.52, 33.31, 33.44, 30.43, 28.56, 36.1,  37.97, 43.02, 35.8,  36.3,  40.26,
-    44.0,  40.1,  45.15, 44.3,  40.49, 44.33, 43.93, 41.31, 48.33, 44.36, 34.03,
-    33.18, 38.23, 40.82, 34.52, 39.57, 33.44, 38.79, 32.95, 29.34, 35.8,  33.38,
-    36.3,  46.85, 51.61, 35.9,  35.21, 39.97, 35.8,  35.64, 38.92, 33.77, 32.13,
-    33.18, 29.41, 28.49, 27.08, 28.66, 28.72, 27.28, 29.31, 33.67, 34.89, 26.69,
-    31.38, 36.36, 44.52, 43.77, 32.16, 32.69, 37.51, 36.33, 40.23, 36.75, 35.31,
-    35.93, 46.23, 51.08, 45.15, 35.21, 37.54, 44.03, 40.33, 39.34, 39.28, 33.61,
-    38.66, 39.51, 39.9,  39.15, 44.85, 44.56, 35.44, 35.05, 37.38, 38.59, 38.49,
-    38.56, 50.07, 48.62, 38.0,  38.46, 43.97, 32.23, 40.3,  52.33, 46.43, 42.79,
-    46.62, 41.87, 42.26, 44.62, 44.43, 43.34, 47.9,  41.11, 40.66, 35.57, 44.39,
-    40.52, 47.57, 46.98, 43.57, 42.56, 51.38, 46.07, 61.21, 40.26, 47.02, 45.8,
-    41.08, 41.93, 39.31, 36.92, 30.59, 38.39, 54.49, 40.92, 36.1,  38.92, 32.23,
-    37.25, 43.61, 40.36, 37.18, 55.84, 38.75, 38.62, 42.07, 32.46, 37.8,  35.8,
-    35.84, 31.48, 35.18, 34.46, 37.54, 34.03, 36.33, 36.66, 41.28, 46.46, 47.08,
-    40.2,  43.44, 39.67, 42.43, 32.69, 35.57, 33.41, 32.36, 45.7,  35.57, 29.8,
-    29.51, 31.25, 29.87, 30.1,  31.44, 26.85, 32.13, 30.2,  44.69, 31.41, 29.54,
-    30.52, 29.57, 31.21, 30.56, 25.9,  31.48, 32.56, 33.31, 36.69, 31.21, 31.25,
-    32.43, 32.95, 26.62, 36.79, 36.1,  33.44, 39.28, 37.77, 42.79, 38.75, 37.8,
-    42.92, 40.03, 35.64, 40.03, 40.13, 36.39, 34.0,  37.28, 38.66, 30.26, 32.03,
-    30.56, 32.2,  38.85, 37.08, 34.0,  38.98, 38.75, 29.93, 41.77, 37.21, 42.36,
-    48.07, 51.74, 46.16, 39.9,  39.28, 47.93, 45.84, 40.89, 39.41, 43.97, 34.69,
-    40.95, 37.93, 38.62, 41.05, 37.97, 41.77, 38.46, 34.49, 37.31, 36.69, 37.08,
-    40.43, 37.51, 42.43, 40.75, 50.23, 42.2,  47.31, 37.11, 36.2,  34.92, 44.03,
-    40.56, 40.2,  32.26, 33.31, 30.3,  32.33, 42.03, 38.75, 38.39, 35.97, 33.74,
-    36.33, 33.31, 36.3,  39.34, 47.41, 42.85, 36.49, 37.97, 38.49, 38.03, 45.31,
-    40.43, 33.64, 35.31, 40.03, 37.21, 36.95, 36.03, 35.74, 36.72, 43.15, 40.95,
-    36.72, 42.26, 35.15, 35.18, 36.62, 39.08, 32.59, 44.52, 33.15, 34.56, 36.2,
-    44.2,  46.2,  47.84, 39.77, 46.26, 38.16, 39.8,  38.92, 38.92, 44.26, 38.1,
-    37.64, 46.72, 41.44, 37.67, 39.64, 40.52, 41.08, 42.66, 44.3,  46.46, 40.36,
-    41.38, 40.98, 46.56, 50.98, 48.0,  46.16, 42.49, 51.15, 50.66, 49.84, 40.98,
-    37.28, 41.8,  41.25, 34.23, 42.52, 37.48, 28.92, 34.92, 40.26, 34.43, 33.97,
-    33.84, 33.18, 34.82, 39.31, 37.31, 34.3,  33.25, 34.69, 39.41, 36.72, 38.89,
-    37.44, 37.21, 32.85, 36.3,  40.95, 31.44, 40.82, 45.15, 50.95, 42.33, 35.93,
-    37.34, 50.13, 40.23, 38.13, 41.87, 41.05, 30.72, 34.1,  33.64, 31.31, 29.7,
-    30.43, 32.43, 34.89, 36.36, 42.72, 30.13, 40.52, 27.97, 29.11, 54.66, 28.26,
-    38.16, 32.16, 32.23, 36.72, 42.36, 40.13, 36.85, 43.51, 38.1,  45.67, 40.07,
-    45.11, 42.92, 44.07, 36.13, 42.72, 41.51, 40.16, 40.56, 36.92, 49.93, 40.07,
-    39.11, 42.2,  47.25, 39.44, 41.18, 43.34, 41.67, 45.51, 45.41, 47.28, 52.75,
-    46.56, 35.21, 37.54, 56.2,  52.23, 50.43, 43.38, 42.79, 43.08, 38.36, 44.16,
-    39.93, 40.72, 40.43, 44.85, 47.54, 43.97, 42.36, 48.03, 44.16, 53.61, 44.1,
-    49.38, 47.7,  48.98, 50.39, 45.15, 38.92, 44.23, 45.11, 35.31, 47.57, 40.66,
-    39.84, 39.05, 26.89, 38.98, 31.41, 32.92, 32.13, 42.66, 33.64, 38.2,  32.0,
-    27.05, 31.7,  35.41, 36.23, 48.23, 35.57, 36.26, 39.51, 41.48, 39.8,  49.51,
-    40.36, 44.43, 38.46, 40.36, 44.23, 49.93, 42.89, 38.52, 41.9,  36.13, 43.31,
-    48.39, 48.46, 43.02, 44.66, 44.52, 41.34, 41.77, 50.49, 53.7,  43.77, 39.21,
-    36.43, 36.79, 39.31, 33.05, 35.77, 33.74, 29.18, 37.8,  37.51, 34.52, 39.11,
-    35.64, 47.74, 42.75, 38.13, 37.11, 37.74, 48.23, 62.0,  44.72, 39.61, 51.41,
-    44.85, 49.57, 38.23, 39.18, 37.18, 47.51, 46.49, 47.54, 49.34, 47.15, 45.84,
-    44.39, 47.57, 43.21, 46.0,  35.84, 44.89, 43.28, 40.95, 40.92, 40.23, 42.33,
-    48.82, 45.25, 36.85, 40.82, 40.07, 39.7,  39.28, 42.0,  40.95, 51.44, 52.79,
-    44.79, 41.38, 41.48, 39.7,  31.05, 32.52, 36.23, 41.51, 35.74, 37.28, 36.07,
-    61.25, 39.64, 36.36, 34.95, 39.05, 32.56, 36.59, 33.9,  40.69, 35.48, 34.46,
-    40.03, 48.82, 54.13, 39.97, 40.69, 39.08, 46.26, 42.75, 34.92, 34.13, 32.59,
-    36.49, 34.33, 32.43, 36.07, 33.87, 33.38, 31.74, 44.3,  37.64, 42.39, 48.3,
-    38.26, 49.41, 42.72, 40.1,  41.02, 39.8,  33.51, 36.49, 36.66, 36.46, 40.56,
-    44.85, 47.8,  42.62, 39.9,  39.7,  47.38, 56.98, 44.46, 48.82, 40.66, 45.93,
-    49.05, 42.39, 47.9,  44.2,  37.44, 44.07, 43.38, 44.89, 45.67, 35.97, 37.25,
-    42.79, 42.82, 30.23, 35.87, 33.8,  31.02, 28.07, 27.38, 29.67, 28.92, 28.89,
-    47.41, 40.79, 36.16, 46.85, 42.72, 41.15, 42.92, 30.56, 32.46, 29.28, 38.85,
-    29.57, 52.59, 35.84, 53.34, 37.38, 42.79, 47.25, 44.95, 52.59, 56.75, 43.48,
-    46.79, 46.33, 36.2,  48.1,  38.59, 41.34, 50.85, 45.15, 44.13, 42.07, 33.38,
-    40.66, 35.31, 35.54, 36.92, 45.41, 34.75, 32.75, 36.82, 36.89, 44.49, 34.79,
-    34.75, 37.41, 36.56, 36.62, 37.51, 37.44, 35.25, 39.31, 34.33, 35.8,  39.31,
-    50.2,  30.13, 36.92, 53.57, 35.48, 45.11, 34.43, 34.62, 36.52, 40.1,  35.28,
-    39.64, 37.08, 37.41, 31.61, 37.48, 34.52, 32.46, 38.33, 32.13, 39.87, 39.87,
-    38.75, 39.8,  38.1,  31.97, 38.46, 43.87, 39.44, 38.79, 29.61, 34.3,  38.56,
-    37.74, 42.16, 40.3,  48.66, 60.52, 44.85, 53.11, 54.3,  47.18, 48.95, 63.05,
-    46.56, 32.85, 34.13, 33.84, 43.54, 34.98, 36.95, 36.75, 33.11, 36.92, 38.72,
-    36.79, 38.16, 27.25, 43.93, 35.44, 39.34, 36.43, 40.79, 40.69, 52.2,  45.15,
-    38.79, 35.93, 38.39, 36.16, 33.93, 36.56, 37.21, 50.66, 44.56, 44.07, 48.52,
-    49.11, 43.77, 31.41, 36.95, 41.05, 39.38, 56.92, 38.2,  39.02, 36.95, 32.98,
-    38.2,  33.8,  26.92, 38.36, 35.28, 46.75, 42.2,  43.15, 44.1,  41.7,  42.23,
-    39.02, 40.95, 32.3,  32.75, 36.69, 29.15, 30.82, 40.59, 40.43, 36.49, 40.3,
-    34.2,  38.33, 41.28, 35.54, 39.38, 45.31, 42.52, 36.13, 43.87, 40.43, 41.8,
-    44.03, 38.98, 44.1,  46.56, 42.33, 49.08, 47.15, 47.48, 45.41, 48.0,  40.72,
-    40.49, 50.69, 38.98, 39.25, 41.11, 38.07, 37.97, 39.57, 46.07, 45.9,  40.1,
-    41.25, 35.51, 36.49, 40.46, 37.28, 43.64, 48.75, 33.25, 32.03, 29.02, 36.36,
-    36.85, 36.98, 33.15, 29.61, 40.95, 34.39, 39.64, 28.89, 31.11, 30.56, 44.0,
-    35.57, 36.56, 45.67, 45.9,  39.57, 41.7,  41.51, 44.72, 38.75, 46.2,  38.0,
-    30.43, 35.74, 38.85, 33.38, 42.72, 34.62, 44.59, 44.33, 38.26, 39.05, 39.7,
-    33.34, 30.69, 68.46, 33.25, 48.62, 35.64, 36.36, 40.2,  37.41, 45.97, 35.34,
-    38.33, 34.59, 32.46, 61.48, 31.11, 36.0,  36.49, 34.2,  34.75, 41.08, 30.03,
-    43.21, 33.57, 37.7,  33.57, 31.87, 50.82, 42.33, 34.13, 34.72, 37.41, 38.03,
-    39.08, 33.57, 40.07, 41.41, 40.85, 45.41, 38.92, 38.66, 38.75, 41.08, 37.67,
-    34.69, 34.2,  37.41, 45.87, 32.72, 39.97, 38.46, 30.43, 40.3,  43.74, 46.95,
-    49.44, 46.52, 56.85, 62.82, 38.52, 42.33, 42.59, 43.9,  54.1,  49.8,  44.95,
-    46.0,  45.02, 39.02, 36.79, 42.39, 38.23, 42.85, 35.25, 36.98, 39.67, 33.02,
-    34.2,  38.07, 55.77, 26.85, 32.89, 33.51, 34.69, 37.21, 44.89, 62.49, 44.89,
-    41.02, 49.18, 33.05, 50.43, 43.02, 43.44, 36.75, 35.64, 31.57, 37.21, 43.31,
-    36.62, 38.36, 42.82, 37.77, 39.51, 39.93, 36.75, 49.15, 43.31, 42.36, 37.84,
-    41.28, 41.9,  37.05, 34.75, 34.33, 35.93, 37.38, 42.89, 38.72, 39.34, 34.92,
-    35.54, 32.1,  37.38, 31.54, 30.49, 29.21, 37.34, 37.11, 34.43, 44.49, 33.9,
-    33.77, 30.2,  38.26, 39.08, 47.18, 51.97, 41.7,  37.74, 40.46, 42.79, 54.13,
-    34.36, 43.84, 41.28, 38.85, 53.44, 39.05, 46.13, 32.62, 36.95, 40.1,  37.08,
-    35.9,  45.77, 50.98, 39.7,  43.28, 37.77, 49.44, 39.64, 45.8,  42.95, 43.28,
-    42.33, 47.93, 42.43, 52.46, 43.61, 48.2,  41.74, 43.44, 40.79, 39.34, 39.18,
-    36.98, 38.49, 43.8,  47.02, 38.07, 35.8,  40.23, 41.18, 30.85, 33.05, 34.07,
-    34.43, 31.67, 36.85, 45.7,  47.61, 44.3,  44.03, 39.38, 47.31, 39.54, 45.64,
-    42.98, 42.59, 41.15, 52.79, 41.15, 36.56, 42.82, 33.48, 33.34, 29.28, 42.0,
-    40.46, 35.57, 44.72, 30.26, 34.23, 32.23, 32.98, 34.2,  30.66, 30.52, 31.77,
-    34.26, 40.16, 32.69, 33.7,  32.72, 32.33, 37.25, 33.38, 37.9,  38.13, 34.39,
-    48.39, 36.62, 49.02, 49.67, 39.38, 46.1,  47.57, 47.02, 47.18, 42.1,  46.82,
-    42.66, 45.38, 47.61, 39.8,  39.05, 47.77, 41.84, 43.08, 44.95, 36.33, 38.95,
-    39.08, 40.56, 45.67, 38.23, 37.15, 36.95, 34.56, 43.77, 44.66, 41.87, 41.38,
-    42.39, 34.98, 39.57, 38.62, 38.16, 44.2,  46.62, 39.74, 41.61, 41.11, 47.87,
-    39.08, 46.39, 37.31, 35.9,  38.26, 42.3,  47.67, 29.64, 47.31, 43.48, 34.2,
-    34.66, 32.0,  32.07};
+  const double bandwidth_in_one_hour[3600] = {
+      100.0, 28.43, 38.89, 48.66, 35.25, 49.34, 35.7,  31.31, 28.79, 32.26,
+      34.2,  28.92, 22.36, 30.46, 34.89, 35.84, 27.15, 40.16, 39.34, 29.02,
+      30.82, 34.69, 26.3,  30.2,  29.93, 33.11, 44.1,  39.15, 41.05, 35.48,
+      34.03, 34.49, 41.11, 30.46, 34.92, 40.59, 35.74, 26.36, 58.23, 34.36,
+      32.52, 36.1,  55.05, 42.1,  39.8,  40.62, 43.48, 39.15, 45.34, 43.87,
+      41.11, 39.97, 38.1,  66.95, 46.07, 40.1,  29.67, 38.89, 38.95, 46.23,
+      35.67, 36.79, 35.18, 34.49, 35.8,  27.9,  39.08, 44.36, 47.21, 32.43,
+      40.26, 35.7,  46.43, 41.67, 48.82, 39.9,  32.92, 43.21, 40.92, 41.84,
+      39.08, 42.49, 43.7,  45.97, 45.41, 44.1,  38.85, 36.79, 41.8,  42.13,
+      32.39, 45.51, 31.34, 37.57, 28.89, 30.62, 34.72, 29.77, 34.69, 29.34,
+      29.64, 37.97, 36.59, 30.85, 31.15, 38.2,  31.67, 30.39, 26.03, 25.34,
+      24.95, 27.61, 35.87, 31.97, 34.66, 36.43, 30.52, 34.79, 41.34, 39.64,
+      44.66, 45.15, 38.0,  40.07, 38.92, 42.62, 40.07, 30.89, 43.84, 34.26,
+      30.56, 35.25, 33.67, 46.79, 48.2,  36.85, 34.59, 51.8,  42.62, 39.48,
+      37.15, 45.02, 38.23, 43.9,  36.62, 32.2,  39.25, 41.67, 45.05, 49.84,
+      41.61, 36.26, 31.54, 34.16, 40.69, 32.92, 33.05, 35.48, 44.03, 46.92,
+      36.66, 45.8,  42.43, 42.66, 41.97, 51.34, 42.56, 31.28, 36.16, 43.21,
+      43.15, 38.16, 49.87, 40.59, 44.23, 43.67, 52.33, 41.31, 41.48, 46.07,
+      39.18, 38.0,  35.34, 41.67, 40.62, 41.87, 35.41, 35.18, 35.57, 33.08,
+      31.25, 31.77, 25.77, 30.62, 30.2,  30.36, 33.05, 33.9,  32.69, 36.46,
+      29.9,  37.48, 37.7,  33.57, 36.03, 31.15, 37.05, 45.31, 44.59, 60.03,
+      36.69, 42.13, 43.11, 40.07, 46.33, 46.59, 39.48, 46.92, 42.36, 42.59,
+      38.82, 41.97, 49.21, 45.28, 48.56, 43.9,  44.79, 41.74, 37.48, 42.72,
+      33.87, 57.15, 39.84, 36.03, 37.05, 35.51, 32.56, 35.25, 40.0,  31.57,
+      33.21, 30.33, 31.9,  43.28, 49.54, 54.82, 52.26, 42.62, 42.72, 45.84,
+      41.67, 55.05, 53.67, 44.23, 47.34, 47.64, 37.15, 41.77, 47.93, 37.97,
+      38.13, 40.3,  45.44, 45.02, 40.52, 46.62, 39.64, 48.66, 41.54, 91.11,
+      33.93, 34.03, 37.7,  35.87, 38.62, 39.64, 40.07, 39.54, 38.62, 42.85,
+      56.98, 41.93, 44.23, 39.74, 46.66, 57.11, 41.8,  38.0,  36.85, 57.38,
+      55.15, 53.9,  47.9,  38.89, 45.31, 44.0,  38.0,  32.39, 48.1,  29.84,
+      36.66, 33.44, 36.75, 38.75, 42.0,  41.15, 45.51, 38.36, 34.16, 37.41,
+      36.69, 37.67, 44.36, 37.28, 39.61, 39.44, 21.93, 42.36, 33.84, 39.54,
+      30.43, 34.82, 28.43, 27.93, 32.2,  33.34, 46.69, 35.9,  34.2,  28.16,
+      32.75, 36.75, 32.98, 38.26, 40.36, 40.2,  41.7,  49.08, 38.79, 39.67,
+      39.87, 37.64, 32.85, 33.84, 37.54, 50.33, 36.98, 46.3,  41.11, 40.39,
+      43.48, 39.97, 41.31, 46.85, 37.21, 38.66, 37.7,  41.18, 28.33, 33.44,
+      25.57, 28.07, 28.1,  29.15, 29.84, 29.7,  32.43, 35.28, 31.11, 32.0,
+      33.08, 37.15, 39.51, 37.08, 41.9,  38.75, 34.66, 36.1,  38.46, 49.28,
+      50.16, 46.03, 38.49, 41.54, 46.23, 54.89, 53.31, 44.85, 42.49, 41.44,
+      39.87, 43.77, 36.62, 43.11, 44.3,  37.28, 41.25, 42.72, 36.3,  32.36,
+      35.77, 33.93, 39.97, 31.11, 37.93, 45.31, 40.98, 40.56, 46.43, 40.79,
+      42.26, 36.23, 43.57, 45.57, 44.75, 44.2,  37.15, 55.77, 38.75, 36.3,
+      45.93, 39.9,  40.95, 49.41, 41.64, 42.89, 50.3,  46.43, 44.95, 41.18,
+      42.98, 43.48, 45.38, 44.85, 48.33, 53.02, 45.15, 50.03, 41.8,  42.82,
+      40.33, 31.9,  34.46, 27.61, 28.3,  33.11, 35.41, 38.43, 33.8,  29.9,
+      50.0,  46.79, 47.38, 57.77, 45.7,  56.95, 49.67, 45.05, 55.44, 42.16,
+      53.51, 47.54, 53.02, 53.48, 49.64, 49.18, 54.59, 57.08, 50.3,  56.3,
+      50.03, 57.21, 56.62, 51.8,  44.03, 52.69, 40.66, 54.07, 55.84, 58.66,
+      42.13, 50.52, 38.49, 42.43, 82.69, 41.48, 39.64, 41.18, 50.0,  44.52,
+      43.44, 46.98, 41.74, 42.3,  39.15, 38.36, 43.57, 41.05, 37.7,  45.08,
+      49.74, 43.57, 41.51, 40.69, 44.79, 40.62, 47.34, 39.15, 37.41, 40.69,
+      41.25, 44.69, 36.89, 43.93, 41.15, 42.69, 42.23, 36.2,  34.56, 32.33,
+      42.62, 52.16, 36.75, 36.33, 43.44, 44.16, 42.23, 46.59, 39.25, 44.56,
+      36.13, 37.9,  36.95, 41.7,  42.92, 50.23, 39.11, 42.23, 37.57, 34.26,
+      36.75, 34.92, 37.87, 46.26, 42.52, 49.21, 43.21, 38.03, 57.84, 42.46,
+      39.34, 36.62, 41.21, 46.66, 52.98, 71.05, 55.25, 45.28, 48.1,  48.66,
+      60.2,  44.95, 46.62, 43.87, 53.21, 43.93, 45.08, 52.3,  43.48, 49.67,
+      43.8,  45.18, 43.11, 54.56, 40.26, 38.59, 36.79, 42.72, 37.38, 45.48,
+      43.31, 48.89, 44.1,  44.49, 49.38, 42.49, 48.52, 44.89, 45.87, 39.25,
+      51.57, 39.54, 41.84, 45.15, 49.77, 41.48, 41.97, 42.56, 34.52, 43.54,
+      38.85, 38.79, 37.64, 43.44, 42.0,  48.03, 46.39, 46.62, 41.9,  34.43,
+      49.11, 41.25, 43.08, 37.28, 36.26, 35.87, 26.52, 32.56, 33.97, 29.84,
+      45.87, 46.2,  42.98, 47.25, 44.49, 44.16, 49.34, 55.67, 45.67, 44.13,
+      48.95, 48.59, 50.75, 43.28, 51.67, 44.03, 36.75, 45.02, 37.84, 50.1,
+      34.3,  37.48, 38.39, 40.59, 37.93, 41.41, 34.07, 39.97, 41.87, 38.72,
+      31.21, 35.61, 42.52, 34.46, 66.92, 59.08, 42.56, 42.07, 37.38, 40.89,
+      40.36, 40.46, 38.33, 59.25, 46.62, 39.31, 44.0,  64.46, 47.8,  50.75,
+      40.75, 51.9,  47.41, 45.28, 51.84, 42.72, 42.03, 38.1,  41.08, 45.41,
+      41.87, 48.49, 43.93, 46.16, 52.23, 45.38, 50.3,  42.52, 52.92, 46.0,
+      49.61, 50.85, 73.61, 51.61, 44.46, 46.0,  79.11, 47.05, 57.7,  43.57,
+      39.05, 36.95, 31.9,  36.49, 34.95, 38.03, 40.26, 37.67, 41.61, 38.95,
+      41.84, 42.26, 38.07, 28.1,  29.57, 34.75, 34.82, 36.59, 34.85, 37.51,
+      35.9,  37.97, 47.97, 37.15, 31.93, 37.54, 32.75, 31.8,  34.07, 45.41,
+      42.49, 31.28, 32.39, 29.21, 34.46, 37.34, 34.13, 32.66, 34.3,  35.02,
+      41.05, 36.89, 46.2,  40.39, 46.07, 35.34, 42.33, 55.87, 45.9,  44.39,
+      43.7,  38.82, 46.79, 46.23, 100.0, 46.52, 50.0,  47.74, 47.61, 45.48,
+      44.69, 49.54, 48.39, 35.64, 40.39, 43.67, 46.95, 45.67, 45.21, 46.59,
+      42.92, 42.0,  39.28, 37.97, 40.16, 52.43, 49.54, 43.67, 44.95, 40.75,
+      40.13, 38.75, 39.64, 46.49, 46.13, 54.95, 39.51, 43.93, 50.23, 50.0,
+      50.07, 39.77, 65.93, 49.7,  45.15, 44.23, 44.98, 53.51, 46.33, 48.52,
+      57.02, 49.25, 46.56, 50.79, 53.93, 50.07, 44.79, 44.89, 40.72, 47.41,
+      46.07, 51.67, 38.72, 40.13, 41.34, 36.92, 38.72, 49.25, 45.31, 36.0,
+      48.07, 38.92, 40.07, 42.36, 40.36, 38.2,  43.34, 41.9,  33.54, 41.28,
+      37.8,  41.57, 37.51, 40.2,  41.31, 45.57, 33.54, 48.2,  38.95, 39.74,
+      36.07, 42.13, 39.51, 43.02, 37.97, 43.31, 41.31, 42.92, 42.03, 35.61,
+      31.77, 34.0,  34.39, 31.57, 32.82, 58.07, 41.21, 36.95, 41.25, 39.51,
+      36.07, 40.2,  42.98, 38.0,  34.3,  39.34, 42.1,  41.08, 44.46, 36.1,
+      40.13, 46.26, 53.8,  38.07, 41.61, 43.93, 42.82, 40.95, 46.98, 38.98,
+      44.46, 46.62, 52.98, 50.3,  49.87, 49.57, 45.28, 41.48, 43.02, 42.49,
+      45.18, 50.98, 53.08, 46.3,  48.69, 43.51, 45.61, 50.26, 54.82, 48.1,
+      44.2,  47.9,  46.66, 51.77, 53.48, 47.84, 41.08, 48.46, 40.62, 47.9,
+      87.84, 50.23, 38.1,  43.28, 46.69, 35.7,  44.66, 37.18, 36.52, 44.98,
+      44.75, 47.57, 43.61, 36.95, 39.74, 30.39, 31.8,  48.52, 30.33, 40.3,
+      36.33, 40.56, 41.11, 40.49, 45.54, 35.25, 44.3,  37.64, 35.31, 41.34,
+      42.62, 35.44, 35.11, 34.07, 34.89, 40.49, 33.67, 38.1,  31.34, 36.33,
+      36.85, 33.25, 41.15, 37.8,  37.77, 32.36, 36.98, 30.85, 46.72, 41.28,
+      48.89, 41.02, 38.72, 42.39, 44.36, 46.13, 48.23, 39.34, 50.92, 49.74,
+      47.02, 48.0,  55.74, 57.11, 54.0,  50.72, 46.49, 51.57, 55.18, 52.0,
+      48.33, 59.21, 58.95, 54.89, 53.15, 59.28, 39.8,  47.25, 47.08, 45.18,
+      52.43, 44.39, 51.64, 50.0,  39.08, 48.43, 48.0,  45.08, 39.77, 39.41,
+      43.08, 46.95, 48.39, 43.02, 41.97, 42.92, 39.08, 47.64, 44.49, 43.28,
+      48.36, 36.56, 41.77, 34.33, 42.46, 42.85, 44.26, 44.03, 43.21, 41.41,
+      43.15, 45.28, 57.41, 39.18, 45.77, 55.02, 48.66, 41.34, 39.15, 40.62,
+      39.51, 46.1,  70.92, 32.36, 36.1,  33.28, 40.3,  34.72, 36.95, 34.79,
+      37.05, 37.48, 40.23, 32.56, 41.74, 30.62, 42.36, 38.07, 43.51, 40.46,
+      40.03, 38.85, 42.46, 36.72, 80.52, 40.82, 42.72, 43.64, 48.26, 44.98,
+      43.97, 43.51, 54.43, 64.56, 49.97, 49.18, 39.64, 37.57, 41.61, 40.62,
+      42.16, 33.48, 42.56, 41.77, 48.46, 43.44, 37.11, 41.08, 40.89, 48.36,
+      39.97, 36.0,  34.92, 38.95, 34.23, 37.51, 37.44, 36.1,  47.15, 50.82,
+      46.1,  36.95, 36.56, 45.05, 41.9,  44.36, 49.44, 37.25, 41.77, 42.59,
+      44.1,  43.48, 42.26, 43.18, 34.3,  45.77, 33.67, 32.23, 40.43, 39.54,
+      37.64, 36.43, 44.46, 34.59, 39.61, 33.87, 45.74, 38.07, 37.61, 42.59,
+      33.87, 43.34, 37.25, 38.07, 39.48, 34.23, 38.1,  36.89, 45.51, 37.34,
+      36.07, 37.44, 37.28, 41.7,  43.28, 37.05, 43.7,  47.7,  41.54, 45.54,
+      44.36, 50.03, 40.52, 33.38, 44.03, 35.38, 39.51, 33.34, 30.46, 33.31,
+      29.9,  32.43, 27.41, 38.85, 28.46, 41.93, 35.64, 69.51, 39.61, 39.77,
+      37.18, 41.51, 39.48, 39.61, 40.46, 40.69, 37.15, 36.03, 51.67, 49.08,
+      48.92, 40.89, 54.56, 51.34, 57.84, 57.64, 53.57, 44.85, 42.0,  44.75,
+      47.7,  48.52, 39.87, 41.25, 40.13, 36.03, 40.1,  41.54, 42.0,  41.08,
+      40.75, 37.41, 41.51, 47.31, 39.9,  33.34, 40.3,  43.18, 51.21, 30.07,
+      42.13, 36.07, 33.31, 43.28, 39.97, 37.11, 45.21, 40.43, 38.66, 36.3,
+      45.34, 37.25, 33.08, 45.18, 37.9,  38.33, 52.69, 41.64, 46.36, 38.13,
+      39.64, 41.11, 38.72, 37.41, 41.05, 53.28, 36.62, 34.66, 35.57, 40.59,
+      36.49, 52.03, 37.25, 40.52, 41.34, 43.51, 45.84, 48.46, 52.23, 40.66,
+      36.23, 36.98, 48.23, 37.31, 32.56, 40.26, 36.07, 36.16, 31.34, 38.23,
+      32.52, 32.59, 34.1,  37.84, 33.74, 33.84, 31.61, 34.52, 32.0,  36.1,
+      38.98, 29.51, 34.52, 35.48, 32.72, 41.84, 43.97, 39.77, 38.59, 40.69,
+      36.49, 36.52, 38.03, 53.11, 56.69, 47.25, 44.49, 41.18, 48.0,  49.38,
+      50.79, 45.02, 55.67, 42.92, 44.13, 46.23, 43.38, 45.93, 47.48, 49.54,
+      47.05, 42.62, 93.97, 43.02, 36.72, 29.54, 35.8,  40.85, 36.43, 36.07,
+      41.84, 36.03, 48.39, 35.57, 44.26, 36.36, 44.56, 56.46, 32.85, 46.36,
+      43.61, 43.31, 37.02, 38.95, 39.9,  45.21, 42.82, 48.03, 44.36, 50.59,
+      50.43, 44.85, 39.9,  50.46, 48.89, 53.25, 43.15, 43.74, 44.1,  41.84,
+      43.18, 39.8,  37.84, 35.61, 32.23, 35.54, 35.18, 35.05, 41.05, 39.38,
+      34.0,  33.67, 39.05, 38.43, 36.43, 31.54, 42.39, 34.52, 38.72, 46.39,
+      41.77, 40.3,  39.15, 32.13, 43.51, 33.31, 38.79, 37.87, 35.34, 35.57,
+      33.84, 41.57, 27.93, 26.75, 17.67, 25.51, 30.16, 26.13, 35.9,  27.51,
+      26.33, 34.66, 26.26, 23.25, 30.07, 38.43, 22.39, 32.49, 28.98, 28.75,
+      39.51, 40.07, 37.51, 68.26, 36.16, 35.21, 37.77, 43.57, 31.84, 30.66,
+      37.38, 32.52, 32.13, 33.28, 45.7,  40.23, 40.98, 31.7,  30.66, 34.56,
+      33.28, 33.8,  31.21, 32.43, 27.31, 30.69, 36.85, 41.64, 45.18, 39.84,
+      40.59, 38.36, 35.02, 35.25, 29.9,  32.98, 31.74, 30.62, 32.39, 29.21,
+      26.89, 27.57, 28.82, 28.43, 31.15, 39.15, 30.79, 44.03, 29.38, 38.43,
+      39.41, 36.66, 41.84, 38.39, 72.43, 32.72, 38.2,  34.56, 28.39, 33.44,
+      37.44, 36.66, 33.11, 28.62, 31.87, 33.11, 39.18, 35.77, 33.64, 30.39,
+      28.39, 29.21, 32.23, 34.07, 28.23, 32.46, 26.13, 21.7,  23.08, 26.79,
+      31.93, 28.39, 29.25, 28.1,  32.13, 33.25, 35.48, 49.11, 34.33, 30.59,
+      28.98, 33.08, 34.26, 28.1,  27.61, 31.74, 27.87, 30.56, 32.0,  42.79,
+      32.82, 42.16, 41.77, 34.43, 30.26, 25.28, 34.36, 30.59, 30.13, 24.59,
+      33.31, 38.43, 36.98, 34.92, 32.39, 34.16, 37.25, 30.79, 33.64, 36.03,
+      38.52, 31.28, 30.89, 35.67, 23.48, 32.3,  27.64, 34.13, 27.21, 31.48,
+      27.18, 33.34, 31.21, 28.79, 34.36, 38.66, 48.66, 34.46, 42.16, 32.72,
+      30.26, 33.21, 25.97, 31.57, 37.8,  32.66, 36.2,  42.23, 34.36, 37.93,
+      29.77, 27.34, 26.79, 30.59, 32.62, 28.69, 37.74, 37.18, 33.51, 59.77,
+      30.23, 29.77, 31.97, 42.95, 39.97, 38.89, 28.72, 30.03, 30.2,  33.18,
+      30.75, 35.34, 33.15, 37.15, 34.95, 34.75, 30.36, 35.84, 28.85, 25.11,
+      27.02, 28.56, 23.8,  28.39, 23.87, 24.49, 24.82, 25.9,  27.93, 26.1,
+      24.13, 22.49, 31.54, 26.52, 30.1,  33.21, 23.97, 33.25, 35.15, 29.54,
+      28.79, 33.64, 31.25, 32.03, 39.57, 27.41, 31.11, 29.9,  29.74, 43.25,
+      44.46, 43.48, 42.1,  38.33, 36.79, 34.52, 40.26, 39.25, 38.33, 29.21,
+      30.75, 34.66, 34.39, 45.18, 46.95, 42.2,  51.25, 36.79, 47.87, 45.61,
+      40.03, 50.1,  42.13, 32.3,  36.03, 38.13, 43.44, 36.43, 26.59, 40.85,
+      35.51, 30.85, 36.75, 28.75, 30.36, 29.57, 33.05, 31.08, 33.34, 36.89,
+      37.57, 34.69, 33.25, 37.74, 37.93, 39.31, 36.36, 34.95, 36.95, 35.61,
+      40.52, 35.18, 33.84, 34.49, 31.97, 32.56, 40.72, 30.89, 37.48, 34.72,
+      33.51, 35.18, 38.92, 38.3,  32.92, 33.18, 33.28, 36.33, 40.1,  41.25,
+      37.38, 36.03, 40.49, 36.79, 43.34, 34.56, 44.89, 33.18, 42.66, 28.92,
+      30.95, 35.77, 50.16, 31.93, 28.85, 27.51, 26.95, 23.61, 20.82, 21.54,
+      20.98, 21.31, 31.28, 29.84, 28.72, 31.21, 27.8,  41.41, 45.87, 31.57,
+      54.66, 54.95, 40.62, 47.38, 45.51, 36.26, 44.23, 32.92, 32.52, 37.61,
+      38.92, 39.48, 33.34, 43.02, 31.64, 33.64, 37.8,  32.07, 35.97, 31.8,
+      39.74, 34.98, 36.59, 34.23, 32.92, 35.57, 39.21, 34.39, 35.84, 33.77,
+      44.56, 40.82, 44.69, 34.07, 39.21, 37.93, 37.08, 32.52, 40.43, 31.57,
+      34.82, 39.44, 33.54, 41.05, 39.9,  35.74, 40.43, 33.84, 39.87, 37.34,
+      39.02, 36.2,  32.49, 39.44, 33.21, 36.33, 28.92, 42.72, 33.77, 36.26,
+      30.2,  33.38, 32.75, 95.44, 50.95, 27.97, 31.57, 33.77, 43.25, 40.72,
+      38.3,  37.8,  42.3,  34.56, 38.36, 44.66, 31.31, 28.72, 36.62, 43.38,
+      29.61, 32.95, 33.8,  34.23, 36.85, 31.31, 36.03, 34.1,  24.52, 27.21,
+      34.36, 35.41, 36.1,  27.9,  27.54, 31.38, 33.18, 36.75, 37.15, 37.11,
+      35.31, 37.02, 42.72, 38.69, 35.08, 31.77, 26.56, 32.0,  32.07, 33.11,
+      28.62, 26.39, 29.38, 34.3,  26.72, 32.33, 21.44, 36.07, 38.56, 36.39,
+      32.23, 37.7,  27.11, 41.38, 39.11, 33.8,  33.64, 37.64, 30.72, 38.92,
+      38.43, 35.54, 33.84, 33.74, 36.69, 40.82, 36.46, 34.72, 39.48, 40.72,
+      37.18, 36.43, 35.77, 44.03, 44.72, 46.26, 51.54, 45.34, 38.39, 34.52,
+      31.87, 32.46, 33.51, 33.34, 36.69, 28.52, 37.7,  37.74, 30.66, 30.72,
+      36.72, 32.82, 38.46, 31.28, 42.69, 40.75, 39.67, 41.41, 38.95, 35.18,
+      33.93, 31.77, 32.59, 27.7,  32.89, 30.26, 29.05, 25.77, 30.2,  35.57,
+      28.13, 25.7,  28.52, 36.75, 41.8,  34.59, 28.59, 26.89, 44.13, 32.36,
+      30.62, 28.07, 34.16, 35.11, 30.56, 31.25, 27.08, 31.44, 32.0,  31.97,
+      39.02, 41.18, 36.23, 43.54, 40.03, 36.33, 33.84, 40.23, 42.62, 48.33,
+      38.59, 44.69, 44.16, 36.26, 31.51, 47.48, 44.85, 41.9,  74.3,  33.9,
+      33.25, 30.89, 31.25, 38.82, 37.87, 35.15, 44.82, 38.49, 41.67, 45.51,
+      33.74, 38.03, 34.03, 38.43, 29.08, 33.34, 42.46, 39.57, 37.57, 35.8,
+      37.25, 38.3,  34.23, 35.28, 34.92, 43.38, 39.38, 38.03, 39.02, 43.84,
+      40.39, 39.51, 43.97, 41.77, 37.44, 39.34, 38.3,  35.31, 34.3,  42.0,
+      32.89, 29.97, 31.77, 38.59, 47.84, 31.93, 38.3,  33.41, 27.51, 26.85,
+      24.66, 37.77, 22.89, 28.79, 29.38, 29.18, 30.52, 27.57, 30.69, 31.8,
+      38.03, 45.08, 30.3,  40.52, 40.07, 27.74, 28.72, 32.26, 33.08, 25.05,
+      25.54, 28.82, 34.03, 32.95, 30.2,  32.66, 34.26, 39.54, 37.9,  35.84,
+      35.97, 31.64, 30.72, 33.57, 34.46, 35.74, 30.92, 32.66, 33.8,  38.33,
+      50.89, 36.95, 36.1,  33.31, 33.8,  31.67, 26.72, 32.33, 36.36, 32.07,
+      22.59, 26.79, 31.08, 35.64, 30.36, 37.28, 41.11, 36.0,  36.69, 40.49,
+      37.15, 36.03, 42.66, 39.8,  41.7,  40.75, 34.36, 37.25, 40.03, 43.77,
+      40.49, 37.54, 40.16, 38.13, 50.82, 40.43, 43.87, 41.15, 43.05, 43.57,
+      35.57, 37.87, 36.03, 53.64, 30.75, 41.74, 34.36, 39.57, 31.02, 34.95,
+      42.43, 42.49, 31.9,  36.75, 35.25, 33.97, 33.9,  31.84, 37.18, 31.97,
+      28.43, 33.25, 31.77, 34.75, 30.95, 37.18, 34.98, 30.07, 31.05, 31.41,
+      49.51, 38.72, 37.18, 34.3,  34.07, 29.93, 39.51, 32.49, 38.52, 31.7,
+      38.56, 31.08, 35.21, 28.2,  32.07, 40.46, 34.33, 33.34, 33.87, 32.26,
+      30.16, 28.85, 27.64, 27.77, 25.93, 32.85, 26.59, 28.95, 34.36, 39.48,
+      28.75, 33.84, 42.3,  41.48, 52.23, 44.0,  52.89, 49.48, 55.02, 50.26,
+      44.39, 51.05, 44.03, 45.05, 46.43, 41.54, 40.92, 37.34, 40.56, 44.66,
+      44.75, 38.3,  44.03, 49.64, 52.1,  55.05, 44.2,  44.75, 53.97, 40.89,
+      37.8,  74.82, 38.16, 42.95, 39.54, 41.64, 36.95, 43.67, 41.21, 38.72,
+      37.8,  39.18, 37.41, 45.21, 43.54, 45.28, 52.2,  38.52, 50.59, 43.31,
+      45.61, 38.92, 47.87, 37.44, 49.61, 53.48, 47.64, 49.34, 43.84, 43.93,
+      46.89, 44.13, 47.67, 40.69, 49.08, 37.05, 40.69, 42.56, 42.95, 37.48,
+      35.67, 47.9,  37.7,  28.69, 30.33, 35.8,  44.79, 45.64, 46.2,  45.38,
+      40.56, 33.57, 35.11, 32.72, 34.2,  38.33, 39.31, 35.41, 41.77, 37.18,
+      55.97, 38.16, 33.54, 38.23, 34.2,  34.16, 31.54, 38.75, 39.28, 42.33,
+      39.7,  42.85, 37.87, 39.21, 42.36, 42.62, 35.51, 42.59, 46.92, 41.77,
+      42.23, 40.36, 52.03, 46.49, 39.38, 31.93, 31.77, 30.52, 33.61, 39.25,
+      30.62, 29.77, 36.95, 35.25, 35.57, 38.1,  39.44, 35.25, 39.05, 54.36,
+      35.34, 36.69, 42.16, 40.3,  40.52, 40.1,  38.72, 47.77, 41.8,  39.28,
+      43.74, 38.23, 39.8,  42.33, 45.21, 38.95, 47.18, 38.23, 36.75, 39.38,
+      38.3,  41.74, 39.97, 39.21, 42.59, 37.93, 41.28, 40.59, 38.43, 38.43,
+      37.31, 37.97, 36.36, 31.84, 30.66, 28.82, 29.02, 27.34, 29.48, 27.08,
+      30.98, 28.1,  28.46, 29.18, 31.84, 34.98, 34.62, 26.92, 31.44, 40.72,
+      29.18, 35.77, 33.97, 46.13, 51.57, 38.46, 35.48, 49.05, 39.61, 32.3,
+      35.97, 37.9,  35.9,  41.38, 35.87, 33.57, 36.33, 31.7,  32.16, 37.48,
+      40.26, 32.26, 28.69, 37.57, 31.64, 31.93, 53.15, 30.72, 32.07, 30.79,
+      38.03, 36.56, 41.97, 41.28, 37.02, 37.87, 37.05, 45.77, 54.46, 43.61,
+      47.74, 42.75, 52.03, 43.54, 37.84, 46.98, 42.26, 38.69, 40.43, 49.44,
+      36.49, 38.13, 36.95, 35.34, 35.21, 38.98, 43.84, 36.2,  42.33, 29.18,
+      37.44, 38.69, 35.18, 35.34, 34.69, 35.74, 34.13, 31.54, 36.3,  31.41,
+      32.52, 37.05, 34.16, 36.95, 38.59, 41.18, 37.48, 46.03, 31.57, 32.59,
+      30.26, 34.52, 35.54, 38.92, 40.0,  50.62, 40.0,  59.64, 48.43, 48.3,
+      34.39, 37.54, 32.69, 31.67, 32.0,  33.31, 47.48, 31.41, 35.11, 32.62,
+      34.46, 31.77, 38.66, 31.18, 39.9,  33.9,  32.03, 28.3,  29.08, 35.41,
+      42.75, 45.41, 44.07, 39.11, 29.38, 38.26, 37.34, 33.25, 35.61, 38.03,
+      34.56, 35.97, 40.95, 46.03, 43.51, 32.3,  44.75, 49.93, 50.33, 35.84,
+      41.25, 42.13, 40.23, 46.0,  33.93, 39.97, 37.38, 36.0,  36.82, 36.75,
+      37.41, 33.64, 43.67, 35.02, 40.16, 31.54, 33.41, 39.41, 34.95, 28.56,
+      35.51, 34.52, 33.31, 33.44, 30.43, 28.56, 36.1,  37.97, 43.02, 35.8,
+      36.3,  40.26, 44.0,  40.1,  45.15, 44.3,  40.49, 44.33, 43.93, 41.31,
+      48.33, 44.36, 34.03, 33.18, 38.23, 40.82, 34.52, 39.57, 33.44, 38.79,
+      32.95, 29.34, 35.8,  33.38, 36.3,  46.85, 51.61, 35.9,  35.21, 39.97,
+      35.8,  35.64, 38.92, 33.77, 32.13, 33.18, 29.41, 28.49, 27.08, 28.66,
+      28.72, 27.28, 29.31, 33.67, 34.89, 26.69, 31.38, 36.36, 44.52, 43.77,
+      32.16, 32.69, 37.51, 36.33, 40.23, 36.75, 35.31, 35.93, 46.23, 51.08,
+      45.15, 35.21, 37.54, 44.03, 40.33, 39.34, 39.28, 33.61, 38.66, 39.51,
+      39.9,  39.15, 44.85, 44.56, 35.44, 35.05, 37.38, 38.59, 38.49, 38.56,
+      50.07, 48.62, 38.0,  38.46, 43.97, 32.23, 40.3,  52.33, 46.43, 42.79,
+      46.62, 41.87, 42.26, 44.62, 44.43, 43.34, 47.9,  41.11, 40.66, 35.57,
+      44.39, 40.52, 47.57, 46.98, 43.57, 42.56, 51.38, 46.07, 61.21, 40.26,
+      47.02, 45.8,  41.08, 41.93, 39.31, 36.92, 30.59, 38.39, 54.49, 40.92,
+      36.1,  38.92, 32.23, 37.25, 43.61, 40.36, 37.18, 55.84, 38.75, 38.62,
+      42.07, 32.46, 37.8,  35.8,  35.84, 31.48, 35.18, 34.46, 37.54, 34.03,
+      36.33, 36.66, 41.28, 46.46, 47.08, 40.2,  43.44, 39.67, 42.43, 32.69,
+      35.57, 33.41, 32.36, 45.7,  35.57, 29.8,  29.51, 31.25, 29.87, 30.1,
+      31.44, 26.85, 32.13, 30.2,  44.69, 31.41, 29.54, 30.52, 29.57, 31.21,
+      30.56, 25.9,  31.48, 32.56, 33.31, 36.69, 31.21, 31.25, 32.43, 32.95,
+      26.62, 36.79, 36.1,  33.44, 39.28, 37.77, 42.79, 38.75, 37.8,  42.92,
+      40.03, 35.64, 40.03, 40.13, 36.39, 34.0,  37.28, 38.66, 30.26, 32.03,
+      30.56, 32.2,  38.85, 37.08, 34.0,  38.98, 38.75, 29.93, 41.77, 37.21,
+      42.36, 48.07, 51.74, 46.16, 39.9,  39.28, 47.93, 45.84, 40.89, 39.41,
+      43.97, 34.69, 40.95, 37.93, 38.62, 41.05, 37.97, 41.77, 38.46, 34.49,
+      37.31, 36.69, 37.08, 40.43, 37.51, 42.43, 40.75, 50.23, 42.2,  47.31,
+      37.11, 36.2,  34.92, 44.03, 40.56, 40.2,  32.26, 33.31, 30.3,  32.33,
+      42.03, 38.75, 38.39, 35.97, 33.74, 36.33, 33.31, 36.3,  39.34, 47.41,
+      42.85, 36.49, 37.97, 38.49, 38.03, 45.31, 40.43, 33.64, 35.31, 40.03,
+      37.21, 36.95, 36.03, 35.74, 36.72, 43.15, 40.95, 36.72, 42.26, 35.15,
+      35.18, 36.62, 39.08, 32.59, 44.52, 33.15, 34.56, 36.2,  44.2,  46.2,
+      47.84, 39.77, 46.26, 38.16, 39.8,  38.92, 38.92, 44.26, 38.1,  37.64,
+      46.72, 41.44, 37.67, 39.64, 40.52, 41.08, 42.66, 44.3,  46.46, 40.36,
+      41.38, 40.98, 46.56, 50.98, 48.0,  46.16, 42.49, 51.15, 50.66, 49.84,
+      40.98, 37.28, 41.8,  41.25, 34.23, 42.52, 37.48, 28.92, 34.92, 40.26,
+      34.43, 33.97, 33.84, 33.18, 34.82, 39.31, 37.31, 34.3,  33.25, 34.69,
+      39.41, 36.72, 38.89, 37.44, 37.21, 32.85, 36.3,  40.95, 31.44, 40.82,
+      45.15, 50.95, 42.33, 35.93, 37.34, 50.13, 40.23, 38.13, 41.87, 41.05,
+      30.72, 34.1,  33.64, 31.31, 29.7,  30.43, 32.43, 34.89, 36.36, 42.72,
+      30.13, 40.52, 27.97, 29.11, 54.66, 28.26, 38.16, 32.16, 32.23, 36.72,
+      42.36, 40.13, 36.85, 43.51, 38.1,  45.67, 40.07, 45.11, 42.92, 44.07,
+      36.13, 42.72, 41.51, 40.16, 40.56, 36.92, 49.93, 40.07, 39.11, 42.2,
+      47.25, 39.44, 41.18, 43.34, 41.67, 45.51, 45.41, 47.28, 52.75, 46.56,
+      35.21, 37.54, 56.2,  52.23, 50.43, 43.38, 42.79, 43.08, 38.36, 44.16,
+      39.93, 40.72, 40.43, 44.85, 47.54, 43.97, 42.36, 48.03, 44.16, 53.61,
+      44.1,  49.38, 47.7,  48.98, 50.39, 45.15, 38.92, 44.23, 45.11, 35.31,
+      47.57, 40.66, 39.84, 39.05, 26.89, 38.98, 31.41, 32.92, 32.13, 42.66,
+      33.64, 38.2,  32.0,  27.05, 31.7,  35.41, 36.23, 48.23, 35.57, 36.26,
+      39.51, 41.48, 39.8,  49.51, 40.36, 44.43, 38.46, 40.36, 44.23, 49.93,
+      42.89, 38.52, 41.9,  36.13, 43.31, 48.39, 48.46, 43.02, 44.66, 44.52,
+      41.34, 41.77, 50.49, 53.7,  43.77, 39.21, 36.43, 36.79, 39.31, 33.05,
+      35.77, 33.74, 29.18, 37.8,  37.51, 34.52, 39.11, 35.64, 47.74, 42.75,
+      38.13, 37.11, 37.74, 48.23, 62.0,  44.72, 39.61, 51.41, 44.85, 49.57,
+      38.23, 39.18, 37.18, 47.51, 46.49, 47.54, 49.34, 47.15, 45.84, 44.39,
+      47.57, 43.21, 46.0,  35.84, 44.89, 43.28, 40.95, 40.92, 40.23, 42.33,
+      48.82, 45.25, 36.85, 40.82, 40.07, 39.7,  39.28, 42.0,  40.95, 51.44,
+      52.79, 44.79, 41.38, 41.48, 39.7,  31.05, 32.52, 36.23, 41.51, 35.74,
+      37.28, 36.07, 61.25, 39.64, 36.36, 34.95, 39.05, 32.56, 36.59, 33.9,
+      40.69, 35.48, 34.46, 40.03, 48.82, 54.13, 39.97, 40.69, 39.08, 46.26,
+      42.75, 34.92, 34.13, 32.59, 36.49, 34.33, 32.43, 36.07, 33.87, 33.38,
+      31.74, 44.3,  37.64, 42.39, 48.3,  38.26, 49.41, 42.72, 40.1,  41.02,
+      39.8,  33.51, 36.49, 36.66, 36.46, 40.56, 44.85, 47.8,  42.62, 39.9,
+      39.7,  47.38, 56.98, 44.46, 48.82, 40.66, 45.93, 49.05, 42.39, 47.9,
+      44.2,  37.44, 44.07, 43.38, 44.89, 45.67, 35.97, 37.25, 42.79, 42.82,
+      30.23, 35.87, 33.8,  31.02, 28.07, 27.38, 29.67, 28.92, 28.89, 47.41,
+      40.79, 36.16, 46.85, 42.72, 41.15, 42.92, 30.56, 32.46, 29.28, 38.85,
+      29.57, 52.59, 35.84, 53.34, 37.38, 42.79, 47.25, 44.95, 52.59, 56.75,
+      43.48, 46.79, 46.33, 36.2,  48.1,  38.59, 41.34, 50.85, 45.15, 44.13,
+      42.07, 33.38, 40.66, 35.31, 35.54, 36.92, 45.41, 34.75, 32.75, 36.82,
+      36.89, 44.49, 34.79, 34.75, 37.41, 36.56, 36.62, 37.51, 37.44, 35.25,
+      39.31, 34.33, 35.8,  39.31, 50.2,  30.13, 36.92, 53.57, 35.48, 45.11,
+      34.43, 34.62, 36.52, 40.1,  35.28, 39.64, 37.08, 37.41, 31.61, 37.48,
+      34.52, 32.46, 38.33, 32.13, 39.87, 39.87, 38.75, 39.8,  38.1,  31.97,
+      38.46, 43.87, 39.44, 38.79, 29.61, 34.3,  38.56, 37.74, 42.16, 40.3,
+      48.66, 60.52, 44.85, 53.11, 54.3,  47.18, 48.95, 63.05, 46.56, 32.85,
+      34.13, 33.84, 43.54, 34.98, 36.95, 36.75, 33.11, 36.92, 38.72, 36.79,
+      38.16, 27.25, 43.93, 35.44, 39.34, 36.43, 40.79, 40.69, 52.2,  45.15,
+      38.79, 35.93, 38.39, 36.16, 33.93, 36.56, 37.21, 50.66, 44.56, 44.07,
+      48.52, 49.11, 43.77, 31.41, 36.95, 41.05, 39.38, 56.92, 38.2,  39.02,
+      36.95, 32.98, 38.2,  33.8,  26.92, 38.36, 35.28, 46.75, 42.2,  43.15,
+      44.1,  41.7,  42.23, 39.02, 40.95, 32.3,  32.75, 36.69, 29.15, 30.82,
+      40.59, 40.43, 36.49, 40.3,  34.2,  38.33, 41.28, 35.54, 39.38, 45.31,
+      42.52, 36.13, 43.87, 40.43, 41.8,  44.03, 38.98, 44.1,  46.56, 42.33,
+      49.08, 47.15, 47.48, 45.41, 48.0,  40.72, 40.49, 50.69, 38.98, 39.25,
+      41.11, 38.07, 37.97, 39.57, 46.07, 45.9,  40.1,  41.25, 35.51, 36.49,
+      40.46, 37.28, 43.64, 48.75, 33.25, 32.03, 29.02, 36.36, 36.85, 36.98,
+      33.15, 29.61, 40.95, 34.39, 39.64, 28.89, 31.11, 30.56, 44.0,  35.57,
+      36.56, 45.67, 45.9,  39.57, 41.7,  41.51, 44.72, 38.75, 46.2,  38.0,
+      30.43, 35.74, 38.85, 33.38, 42.72, 34.62, 44.59, 44.33, 38.26, 39.05,
+      39.7,  33.34, 30.69, 68.46, 33.25, 48.62, 35.64, 36.36, 40.2,  37.41,
+      45.97, 35.34, 38.33, 34.59, 32.46, 61.48, 31.11, 36.0,  36.49, 34.2,
+      34.75, 41.08, 30.03, 43.21, 33.57, 37.7,  33.57, 31.87, 50.82, 42.33,
+      34.13, 34.72, 37.41, 38.03, 39.08, 33.57, 40.07, 41.41, 40.85, 45.41,
+      38.92, 38.66, 38.75, 41.08, 37.67, 34.69, 34.2,  37.41, 45.87, 32.72,
+      39.97, 38.46, 30.43, 40.3,  43.74, 46.95, 49.44, 46.52, 56.85, 62.82,
+      38.52, 42.33, 42.59, 43.9,  54.1,  49.8,  44.95, 46.0,  45.02, 39.02,
+      36.79, 42.39, 38.23, 42.85, 35.25, 36.98, 39.67, 33.02, 34.2,  38.07,
+      55.77, 26.85, 32.89, 33.51, 34.69, 37.21, 44.89, 62.49, 44.89, 41.02,
+      49.18, 33.05, 50.43, 43.02, 43.44, 36.75, 35.64, 31.57, 37.21, 43.31,
+      36.62, 38.36, 42.82, 37.77, 39.51, 39.93, 36.75, 49.15, 43.31, 42.36,
+      37.84, 41.28, 41.9,  37.05, 34.75, 34.33, 35.93, 37.38, 42.89, 38.72,
+      39.34, 34.92, 35.54, 32.1,  37.38, 31.54, 30.49, 29.21, 37.34, 37.11,
+      34.43, 44.49, 33.9,  33.77, 30.2,  38.26, 39.08, 47.18, 51.97, 41.7,
+      37.74, 40.46, 42.79, 54.13, 34.36, 43.84, 41.28, 38.85, 53.44, 39.05,
+      46.13, 32.62, 36.95, 40.1,  37.08, 35.9,  45.77, 50.98, 39.7,  43.28,
+      37.77, 49.44, 39.64, 45.8,  42.95, 43.28, 42.33, 47.93, 42.43, 52.46,
+      43.61, 48.2,  41.74, 43.44, 40.79, 39.34, 39.18, 36.98, 38.49, 43.8,
+      47.02, 38.07, 35.8,  40.23, 41.18, 30.85, 33.05, 34.07, 34.43, 31.67,
+      36.85, 45.7,  47.61, 44.3,  44.03, 39.38, 47.31, 39.54, 45.64, 42.98,
+      42.59, 41.15, 52.79, 41.15, 36.56, 42.82, 33.48, 33.34, 29.28, 42.0,
+      40.46, 35.57, 44.72, 30.26, 34.23, 32.23, 32.98, 34.2,  30.66, 30.52,
+      31.77, 34.26, 40.16, 32.69, 33.7,  32.72, 32.33, 37.25, 33.38, 37.9,
+      38.13, 34.39, 48.39, 36.62, 49.02, 49.67, 39.38, 46.1,  47.57, 47.02,
+      47.18, 42.1,  46.82, 42.66, 45.38, 47.61, 39.8,  39.05, 47.77, 41.84,
+      43.08, 44.95, 36.33, 38.95, 39.08, 40.56, 45.67, 38.23, 37.15, 36.95,
+      34.56, 43.77, 44.66, 41.87, 41.38, 42.39, 34.98, 39.57, 38.62, 38.16,
+      44.2,  46.62, 39.74, 41.61, 41.11, 47.87, 39.08, 46.39, 37.31, 35.9,
+      38.26, 42.3,  47.67, 29.64, 47.31, 43.48, 34.2,  34.66, 32.0,  32.07};
 
   void BurstWritten(ThreadState* thread, enum OperationType write_merge) {
     // Special thread that keeps writing until other threads are done.
@@ -5525,7 +5554,8 @@ const double bandwidth_in_one_hour[3600] = {
         exit(1);
       }
       bytes += key.size() + val.size();
-      thread->stats.FinishedOps(&db_, db_.db, 1, kWrite);
+
+      thread->stats.FinishedOps(&db_, db_.db, 1, kWrite, &key, &val);
 
       write_rate_limiter->Request(key.size() + val.size(), Env::IO_HIGH,
                                   nullptr /* stats */,
@@ -5541,8 +5571,6 @@ const double bandwidth_in_one_hour[3600] = {
       BurstWritten(thread, kWrite);
     }
   }
-
-
 
   class KeyGenerator {
    public:
@@ -5592,9 +5620,7 @@ const double bandwidth_in_one_hour[3600] = {
     std::vector<uint64_t> values_;
   };
 
-  DB* SelectDB(ThreadState* thread) {
-    return SelectDBWithCfh(thread)->db;
-  }
+  DB* SelectDB(ThreadState* thread) { return SelectDBWithCfh(thread)->db; }
 
   DBWithColumnFamilies* SelectDBWithCfh(ThreadState* thread) {
     return SelectDBWithCfh(thread->rand.Next());
@@ -5603,13 +5629,13 @@ const double bandwidth_in_one_hour[3600] = {
   DBWithColumnFamilies* SelectDBWithCfh(uint64_t rand_int) {
     if (db_.db != nullptr) {
       return &db_;
-    } else  {
+    } else {
       return &multi_dbs_[rand_int % multi_dbs_.size()];
     }
   }
 
   double SineRate(double x) {
-    return FLAGS_sine_a*sin((FLAGS_sine_b*x) + FLAGS_sine_c) + FLAGS_sine_d;
+    return FLAGS_sine_a * sin((FLAGS_sine_b * x) + FLAGS_sine_c) + FLAGS_sine_d;
   }
 
   void DoWrite(ThreadState* thread, WriteMode write_mode) {
@@ -5651,6 +5677,7 @@ const double bandwidth_in_one_hour[3600] = {
 
     std::unique_ptr<const char[]> key_guard;
     Slice key = AllocateKey(&key_guard);
+    Slice val;
     std::unique_ptr<const char[]> begin_key_guard;
     Slice begin_key = AllocateKey(&begin_key_guard);
     std::unique_ptr<const char[]> end_key_guard;
@@ -5885,7 +5912,6 @@ const double bandwidth_in_one_hour[3600] = {
           rand_num = key_gens[id]->Next();
         }
         GenerateKeyFromInt(rand_num, FLAGS_num, &key);
-        Slice val;
         if (kNumDispAndPersEntries > 0) {
           random_value = rnd_disposable_entry.RandomString(
               is_disposable_entry ? FLAGS_disposable_entries_value_size
@@ -5913,8 +5939,7 @@ const double bandwidth_in_one_hour[3600] = {
           // We use same rand_num as seed for key and column family so that we
           // can deterministically find the cfh corresponding to a particular
           // key while reading the key.
-          batch.Put(db_with_cfh->GetCfh(rand_num), key,
-                    val);
+          batch.Put(db_with_cfh->GetCfh(rand_num), key, val);
         }
         batch_bytes += val.size() + key_size_ + user_timestamp_size_;
         bytes += val.size() + key_size_ + user_timestamp_size_;
@@ -5986,8 +6011,8 @@ const double bandwidth_in_one_hour[3600] = {
       }
       if (thread->shared->write_rate_limiter.get() != nullptr) {
         thread->shared->write_rate_limiter->Request(
-            batch_bytes, Env::IO_HIGH,
-            nullptr /* stats */, RateLimiter::OpType::kWrite);
+            batch_bytes, Env::IO_HIGH, nullptr /* stats */,
+            RateLimiter::OpType::kWrite);
         // Set time at which last op finished to Now() to hide latency and
         // sleep from rate limiter. Also, do the check once per batch, not
         // once per write.
@@ -6008,7 +6033,7 @@ const double bandwidth_in_one_hour[3600] = {
         s = db_with_cfh->db->Write(write_options_, &batch);
       }
       thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db,
-                                entries_per_batch_, kWrite);
+                                entries_per_batch_, kWrite, &key, &val);
       if (FLAGS_sine_write_rate) {
         uint64_t now = FLAGS_env->NowMicros();
 
@@ -6022,12 +6047,12 @@ const double bandwidth_in_one_hour[3600] = {
         if (usecs_since_last >
             (FLAGS_sine_write_rate_interval_milliseconds * uint64_t{1000})) {
           double usecs_since_start =
-                  static_cast<double>(now - thread->stats.GetStart());
+              static_cast<double>(now - thread->stats.GetStart());
           thread->stats.ResetSineInterval();
           uint64_t write_rate =
-                  static_cast<uint64_t>(SineRate(usecs_since_start / 1000000.0));
+              static_cast<uint64_t>(SineRate(usecs_since_start / 1000000.0));
           thread->shared->write_rate_limiter.reset(
-                  NewGenericRateLimiter(write_rate));
+              NewGenericRateLimiter(write_rate));
         }
       }
       if (!s.ok()) {
@@ -6123,11 +6148,13 @@ const double bandwidth_in_one_hour[3600] = {
             continue;
           }
         }
-        writes_ /= static_cast<int64_t>(open_options_.max_bytes_for_level_multiplier);
+        writes_ /=
+            static_cast<int64_t>(open_options_.max_bytes_for_level_multiplier);
       }
       for (size_t i = 0; i < num_db; i++) {
         if (sorted_runs[i].size() < num_levels - 1) {
-          fprintf(stderr, "n is too small to fill %" ROCKSDB_PRIszt " levels\n", num_levels);
+          fprintf(stderr, "n is too small to fill %" ROCKSDB_PRIszt " levels\n",
+                  num_levels);
           exit(1);
         }
       }
@@ -6138,13 +6165,14 @@ const double bandwidth_in_one_hour[3600] = {
         auto options = db->GetOptions();
         MutableCFOptions mutable_cf_options(options);
         for (size_t j = 0; j < sorted_runs[i].size(); j++) {
-          compactionOptions.output_file_size_limit =
-              MaxFileSizeForLevel(mutable_cf_options,
-                  static_cast<int>(output_level), compaction_style);
+          compactionOptions.output_file_size_limit = MaxFileSizeForLevel(
+              mutable_cf_options, static_cast<int>(output_level),
+              compaction_style);
           std::cout << sorted_runs[i][j].size() << std::endl;
-          db->CompactFiles(compactionOptions, {sorted_runs[i][j].back().name,
-                                               sorted_runs[i][j].front().name},
-                           static_cast<int>(output_level - j) /*level*/);
+          db->CompactFiles(
+              compactionOptions,
+              {sorted_runs[i][j].back().name, sorted_runs[i][j].front().name},
+              static_cast<int>(output_level - j) /*level*/);
         }
       }
     } else if (compaction_style == kCompactionStyleUniversal) {
@@ -6175,11 +6203,13 @@ const double bandwidth_in_one_hour[3600] = {
           }
           num_files_at_level0[i] = meta.levels[0].files.size();
         }
-        writes_ =  static_cast<int64_t>(writes_* static_cast<double>(100) / (ratio + 200));
+        writes_ = static_cast<int64_t>(writes_ * static_cast<double>(100) /
+                                       (ratio + 200));
       }
       for (size_t i = 0; i < num_db; i++) {
         if (sorted_runs[i].size() < num_levels) {
-          fprintf(stderr, "n is too small to fill %" ROCKSDB_PRIszt  " levels\n", num_levels);
+          fprintf(stderr, "n is too small to fill %" ROCKSDB_PRIszt " levels\n",
+                  num_levels);
           exit(1);
         }
       }
@@ -6190,9 +6220,9 @@ const double bandwidth_in_one_hour[3600] = {
         auto options = db->GetOptions();
         MutableCFOptions mutable_cf_options(options);
         for (size_t j = 0; j < sorted_runs[i].size(); j++) {
-          compactionOptions.output_file_size_limit =
-              MaxFileSizeForLevel(mutable_cf_options,
-                  static_cast<int>(output_level), compaction_style);
+          compactionOptions.output_file_size_limit = MaxFileSizeForLevel(
+              mutable_cf_options, static_cast<int>(output_level),
+              compaction_style);
           db->CompactFiles(
               compactionOptions,
               {sorted_runs[i][j].back().name, sorted_runs[i][j].front().name},
@@ -6203,7 +6233,7 @@ const double bandwidth_in_one_hour[3600] = {
     } else if (compaction_style == kCompactionStyleFIFO) {
       if (num_levels != 1) {
         return Status::InvalidArgument(
-          "num_levels should be 1 for FIFO compaction");
+            "num_levels should be 1 for FIFO compaction");
       }
       if (FLAGS_num_multi_db != 0) {
         return Status::InvalidArgument("Doesn't support multiDB");
@@ -6220,7 +6250,7 @@ const double bandwidth_in_one_hour[3600] = {
         db->GetColumnFamilyMetaData(&meta);
         auto total_size = meta.levels[0].size;
         if (total_size >=
-          db->GetOptions().compaction_options_fifo.max_table_files_size) {
+            db->GetOptions().compaction_options_fifo.max_table_files_size) {
           for (auto file_meta : meta.levels[0].files) {
             file_names.emplace_back(file_meta.name);
           }
@@ -6257,8 +6287,8 @@ const double bandwidth_in_one_hour[3600] = {
         db->GetColumnFamilyMetaData(&meta);
         auto total_size = meta.levels[0].size;
         assert(total_size <=
-          db->GetOptions().compaction_options_fifo.max_table_files_size);
-          break;
+               db->GetOptions().compaction_options_fifo.max_table_files_size);
+        break;
       }
 
       // verify smallest/largest seqno and key range of each sorted run
@@ -6324,7 +6354,9 @@ const double bandwidth_in_one_hour[3600] = {
     for (size_t k = 0; k < num_db; k++) {
       auto db = db_list[k];
       fprintf(stdout,
-              "---------------------- DB %" ROCKSDB_PRIszt " LSM ---------------------\n", k);
+              "---------------------- DB %" ROCKSDB_PRIszt
+              " LSM ---------------------\n",
+              k);
       db->GetColumnFamilyMetaData(&meta);
       for (auto& levelMeta : meta.levels) {
         if (levelMeta.files.empty()) {
@@ -6390,7 +6422,9 @@ const double bandwidth_in_one_hour[3600] = {
     int64_t bytes = 0;
     for (iter->SeekToFirst(); i < reads_ && iter->Valid(); iter->Next()) {
       bytes += iter->key().size() + iter->value().size();
-      thread->stats.FinishedOps(nullptr, db, 1, kRead);
+      Slice s_key = iter->key();
+      Slice s_value = iter->value();
+      thread->stats.FinishedOps(nullptr, db, 1, kRead, &s_key, &s_value);
       ++i;
 
       if (thread->shared->read_rate_limiter.get() != nullptr &&
@@ -6447,7 +6481,8 @@ const double bandwidth_in_one_hour[3600] = {
             256, Env::IO_HIGH, nullptr /* stats */, RateLimiter::OpType::kRead);
       }
 
-      thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead);
+      thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead, &key,
+                                &pinnable_val);
     }
 
     char msg[100];
@@ -6474,7 +6509,9 @@ const double bandwidth_in_one_hour[3600] = {
     int64_t bytes = 0;
     for (iter->SeekToLast(); i < reads_ && iter->Valid(); iter->Prev()) {
       bytes += iter->key().size() + iter->value().size();
-      thread->stats.FinishedOps(nullptr, db, 1, kRead);
+      Slice s_key = iter->key();
+      Slice s_value = iter->value();
+      thread->stats.FinishedOps(nullptr, db, 1, kRead, &s_key, &s_value);
       ++i;
       if (thread->shared->read_rate_limiter.get() != nullptr &&
           i % 1024 == 1023) {
@@ -6537,12 +6574,14 @@ const double bandwidth_in_one_hour[3600] = {
         thread->shared->read_rate_limiter->Request(
             100, Env::IO_HIGH, nullptr /* stats */, RateLimiter::OpType::kRead);
       }
-
-      thread->stats.FinishedOps(nullptr, db, 100, kRead);
+      Slice s_val(value);
+      thread->stats.FinishedOps(nullptr, db, 100, kRead, &key, &s_val);
     } while (!duration.Done(100));
 
     char msg[100];
-    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found, "
+    snprintf(msg, sizeof(msg),
+             "(%" PRIu64 " of %" PRIu64
+             " found, "
              "issued %" PRIu64 " non-exist keys)\n",
              found, read, nonexist);
 
@@ -6574,6 +6613,7 @@ const double bandwidth_in_one_hour[3600] = {
     int64_t read = 0;
     int64_t found = 0;
     int64_t bytes = 0;
+    Slice s_val;
     int num_keys = 0;
     int64_t key_rand = 0;
     ReadOptions options = read_options_;
@@ -6654,6 +6694,7 @@ const double bandwidth_in_one_hour[3600] = {
         }
       } else {
         s = db_with_cfh->db->Get(options, cfh, key, &pinnable_val, ts_ptr);
+        s_val = Slice(*pinnable_val.GetSelf());
       }
 
       if (s.ok()) {
@@ -6673,13 +6714,13 @@ const double bandwidth_in_one_hour[3600] = {
         thread->shared->read_rate_limiter->Request(
             256, Env::IO_HIGH, nullptr /* stats */, RateLimiter::OpType::kRead);
       }
-
-      thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead);
+      thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead, &key,
+                                &s_val);
     }
 
     char msg[100];
-    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found)\n",
-             found, read);
+    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found)\n", found,
+             read);
 
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
@@ -6692,9 +6733,10 @@ const double bandwidth_in_one_hour[3600] = {
     int64_t bytes = 0;
     int64_t num_multireads = 0;
     int64_t found = 0;
+    Slice s_val;
     ReadOptions options = read_options_;
     std::vector<Slice> keys;
-    std::vector<std::unique_ptr<const char[]> > key_guards;
+    std::vector<std::unique_ptr<const char[]>> key_guards;
     std::vector<std::string> values(entries_per_batch_);
     PinnableSlice* pin_values = new PinnableSlice[entries_per_batch_];
     std::unique_ptr<PinnableSlice[]> pin_values_guard(pin_values);
@@ -6754,6 +6796,7 @@ const double bandwidth_in_one_hour[3600] = {
 
         read += entries_per_batch_;
         num_multireads++;
+        s_val = Slice(*pin_values[0].GetSelf());
         for (int64_t i = 0; i < entries_per_batch_; ++i) {
           if (stat_list[i].ok()) {
             bytes +=
@@ -6774,12 +6817,13 @@ const double bandwidth_in_one_hour[3600] = {
             256 * entries_per_batch_, Env::IO_HIGH, nullptr /* stats */,
             RateLimiter::OpType::kRead);
       }
-      thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kRead);
+      thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kRead,
+                                &keys[0], &s_val);
     }
 
     char msg[100];
-    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found)",
-             found, read);
+    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found)", found,
+             read);
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
   }
@@ -7177,22 +7221,21 @@ const double bandwidth_in_one_hour[3600] = {
           thread->shared->read_rate_limiter->Request(100, Env::IO_HIGH,
                                                      nullptr /*stats*/);
         }
-        thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead);
+        thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead, &key,
+                                  &pinnable_val);
       } else if (query_type == 1) {
         // the Put query
         puts++;
-        int64_t val_size = ParetoCdfInversion(
-            u, FLAGS_value_theta, FLAGS_value_k, FLAGS_value_sigma);
+        int64_t val_size = ParetoCdfInversion(u, FLAGS_value_theta,
+                                              FLAGS_value_k, FLAGS_value_sigma);
         if (val_size < 10) {
           val_size = 10;
         } else if (val_size > value_max) {
           val_size = val_size % value_max;
         }
         total_val_size += val_size;
-
-        s = db_with_cfh->db->Put(
-            write_options_, key,
-            gen.Generate(static_cast<unsigned int>(val_size)));
+        Slice value(gen.Generate(static_cast<unsigned int>(val_size)));
+        s = db_with_cfh->db->Put(write_options_, key, value);
         if (!s.ok()) {
           fprintf(stderr, "put error: %s\n", s.ToString().c_str());
           ErrorExit();
@@ -7202,7 +7245,8 @@ const double bandwidth_in_one_hour[3600] = {
           thread->shared->write_rate_limiter->Request(100, Env::IO_HIGH,
                                                       nullptr /*stats*/);
         }
-        thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kWrite);
+        thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kWrite, &key,
+                                  &value);
       } else if (query_type == 2) {
         // Seek query
         if (db_with_cfh->db != nullptr) {
@@ -7230,6 +7274,7 @@ const double bandwidth_in_one_hour[3600] = {
           }
           delete single_iter;
         }
+        // TODO
         thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kSeek);
       }
     }
@@ -7381,7 +7426,7 @@ const double bandwidth_in_one_hour[3600] = {
         thread->shared->read_rate_limiter->Request(
             256, Env::IO_HIGH, nullptr /* stats */, RateLimiter::OpType::kRead);
       }
-
+      // TODO
       thread->stats.FinishedOps(&db_, db_.db, 1, kSeek);
     }
     for (auto iter : tailing_iters) {
@@ -7389,8 +7434,8 @@ const double bandwidth_in_one_hour[3600] = {
     }
 
     char msg[100];
-    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found)\n",
-             found, read);
+    snprintf(msg, sizeof(msg), "(%" PRIu64 " of %" PRIu64 " found)\n", found,
+             read);
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
   }
@@ -7444,7 +7489,8 @@ const double bandwidth_in_one_hour[3600] = {
         }
       }
       s = db->Write(write_options_, &batch);
-      thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kDelete);
+      thread->stats.FinishedOps(nullptr, db, entries_per_batch_, kDelete, &key,
+                                nullptr);
       if (!s.ok()) {
         fprintf(stderr, "del error: %s\n", s.ToString().c_str());
         exit(1);
@@ -7453,13 +7499,9 @@ const double bandwidth_in_one_hour[3600] = {
     }
   }
 
-  void DeleteSeq(ThreadState* thread) {
-    DoDelete(thread, true);
-  }
+  void DeleteSeq(ThreadState* thread) { DoDelete(thread, true); }
 
-  void DeleteRandom(ThreadState* thread) {
-    DoDelete(thread, false);
-  }
+  void DeleteRandom(ThreadState* thread) { DoDelete(thread, false); }
 
   void ReadWhileWriting(ThreadState* thread) {
     if (thread->tid > 0) {
@@ -7562,12 +7604,12 @@ const double bandwidth_in_one_hour[3600] = {
         exit(1);
       }
       bytes += key.size() + val.size() + user_timestamp_size_;
-      thread->stats.FinishedOps(&db_, db_.db, 1, kWrite);
+      thread->stats.FinishedOps(&db_, db_.db, 1, kWrite, &key, &val);
 
       if (FLAGS_benchmark_write_rate_limit > 0) {
-        write_rate_limiter->Request(
-            key.size() + val.size(), Env::IO_HIGH,
-            nullptr /* stats */, RateLimiter::OpType::kWrite);
+        write_rate_limiter->Request(key.size() + val.size(), Env::IO_HIGH,
+                                    nullptr /* stats */,
+                                    RateLimiter::OpType::kWrite);
       }
 
       if (writes_per_range_tombstone_ > 0 &&
@@ -7600,7 +7642,7 @@ const double bandwidth_in_one_hour[3600] = {
             exit(1);
           }
         }
-        thread->stats.FinishedOps(&db_, db_.db, 1, kWrite);
+        thread->stats.FinishedOps(&db_, db_.db, 1, kWrite, &key, &val);
         // TODO: DeleteRange is not included in calculcation of bytes/rate
         // limiter request
       }
@@ -7652,7 +7694,7 @@ const double bandwidth_in_one_hour[3600] = {
         iter->Next();
         // num_next++;
       }
-
+      // TODO
       thread->stats.FinishedOps(&db_, db_.db, 1, kSeek);
     }
     delete iter;
@@ -7690,7 +7732,6 @@ const double bandwidth_in_one_hour[3600] = {
     s = db->Write(writeoptions, &batch);
     return s;
   }
-
 
   // Given a key K, this deletes (K+"0", V), (K+"1", V), (K+"2", V)
   // in DB atomically i.e in a single batch. Also refer GetMany.
@@ -7803,7 +7844,7 @@ const double bandwidth_in_one_hour[3600] = {
         put_weight = 100 - get_weight - delete_weight;
       }
       GenerateKeyFromInt(thread->rand.Next() % FLAGS_numdistinct,
-          FLAGS_numdistinct, &key);
+                         FLAGS_numdistinct, &key);
       if (get_weight > 0) {
         // do all the gets first
         Status s = GetMany(db, key, &value);
@@ -7816,18 +7857,20 @@ const double bandwidth_in_one_hour[3600] = {
         }
         get_weight--;
         gets_done++;
-        thread->stats.FinishedOps(&db_, db_.db, 1, kRead);
+        Slice s_val = value;
+        thread->stats.FinishedOps(&db_, db_.db, 1, kRead, &key, &s_val);
       } else if (put_weight > 0) {
         // then do all the corresponding number of puts
         // for all the gets we have done earlier
-        Status s = PutMany(db, write_options_, key, gen.Generate());
+        Slice val = gen.Generate();
+        Status s = PutMany(db, write_options_, key, val);
         if (!s.ok()) {
           fprintf(stderr, "putmany error: %s\n", s.ToString().c_str());
           exit(1);
         }
         put_weight--;
         puts_done++;
-        thread->stats.FinishedOps(&db_, db_.db, 1, kWrite);
+        thread->stats.FinishedOps(&db_, db_.db, 1, kWrite, &key, &val);
       } else if (delete_weight > 0) {
         Status s = DeleteMany(db, write_options_, key);
         if (!s.ok()) {
@@ -7836,13 +7879,13 @@ const double bandwidth_in_one_hour[3600] = {
         }
         delete_weight--;
         deletes_done++;
-        thread->stats.FinishedOps(&db_, db_.db, 1, kDelete);
+        thread->stats.FinishedOps(&db_, db_.db, 1, kDelete, &key, nullptr);
       }
     }
     char msg[128];
     snprintf(msg, sizeof(msg),
-             "( get:%" PRIu64 " put:%" PRIu64 " del:%" PRIu64 " total:%" \
-             PRIu64 " found:%" PRIu64 ")",
+             "( get:%" PRIu64 " put:%" PRIu64 " del:%" PRIu64 " total:%" PRIu64
+             " found:%" PRIu64 ")",
              gets_done, puts_done, deletes_done, readwrites_, found);
     thread->stats.AddMessage(msg);
   }
@@ -7894,17 +7937,19 @@ const double bandwidth_in_one_hour[3600] = {
           found++;
         }
         get_weight--;
+        Slice s_val = value;
         reads_done++;
-        thread->stats.FinishedOps(nullptr, db, 1, kRead);
-      } else  if (put_weight > 0) {
+        thread->stats.FinishedOps(nullptr, db, 1, kRead, &key, &s_val);
+      } else if (put_weight > 0) {
         // then do all the corresponding number of puts
         // for all the gets we have done earlier
         Status s;
+        Slice s_val = gen.Generate();
         if (user_timestamp_size_ > 0) {
           Slice ts = mock_app_clock_->Allocate(ts_guard.get());
-          s = db->Put(write_options_, key, ts, gen.Generate());
+          s = db->Put(write_options_, key, ts, s_val);
         } else {
-          s = db->Put(write_options_, key, gen.Generate());
+          s = db->Put(write_options_, key, s_val);
         }
         if (!s.ok()) {
           fprintf(stderr, "put error: %s\n", s.ToString().c_str());
@@ -7912,12 +7957,13 @@ const double bandwidth_in_one_hour[3600] = {
         }
         put_weight--;
         writes_done++;
-        thread->stats.FinishedOps(nullptr, db, 1, kWrite);
+        thread->stats.FinishedOps(nullptr, db, 1, kWrite, &key, &s_val);
       }
     }
     char msg[100];
-    snprintf(msg, sizeof(msg), "( reads:%" PRIu64 " writes:%" PRIu64 \
-             " total:%" PRIu64 " found:%" PRIu64 ")",
+    snprintf(msg, sizeof(msg),
+             "( reads:%" PRIu64 " writes:%" PRIu64 " total:%" PRIu64
+             " found:%" PRIu64 ")",
              reads_done, writes_done, readwrites_, found);
     thread->stats.AddMessage(msg);
   }
@@ -7978,11 +8024,11 @@ const double bandwidth_in_one_hour[3600] = {
         exit(1);
       }
       bytes += key.size() + val.size() + user_timestamp_size_;
-      thread->stats.FinishedOps(nullptr, db, 1, kUpdate);
+      thread->stats.FinishedOps(nullptr, db, 1, kUpdate, &key, &val);
     }
     char msg[100];
-    snprintf(msg, sizeof(msg),
-             "( updates:%" PRIu64 " found:%" PRIu64 ")", readwrites_, found);
+    snprintf(msg, sizeof(msg), "( updates:%" PRIu64 " found:%" PRIu64 ")",
+             readwrites_, found);
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
   }
@@ -8025,7 +8071,8 @@ const double bandwidth_in_one_hour[3600] = {
         exit(1);
       }
 
-      Slice value = gen.Generate(static_cast<unsigned int>(existing_value.size()));
+      Slice value =
+          gen.Generate(static_cast<unsigned int>(existing_value.size()));
       std::string new_value;
 
       if (status.ok()) {
@@ -8049,8 +8096,8 @@ const double bandwidth_in_one_hour[3600] = {
       thread->stats.FinishedOps(nullptr, db, 1);
     }
     char msg[100];
-    snprintf(msg, sizeof(msg),
-             "( updates:%" PRIu64 " found:%" PRIu64 ")", readwrites_, found);
+    snprintf(msg, sizeof(msg), "( updates:%" PRIu64 " found:%" PRIu64 ")",
+             readwrites_, found);
     thread->stats.AddMessage(msg);
   }
 
@@ -8098,7 +8145,7 @@ const double bandwidth_in_one_hour[3600] = {
       Slice operand = gen.Generate();
       if (value.size() > 0) {
         // Use a delimiter to match the semantics for StringAppendOperator
-        value.append(1,',');
+        value.append(1, ',');
       }
       value.append(operand.data(), operand.size());
 
@@ -8115,12 +8162,13 @@ const double bandwidth_in_one_hour[3600] = {
         ErrorExit();
       }
       bytes += key.size() + value.size() + user_timestamp_size_;
-      thread->stats.FinishedOps(nullptr, db, 1, kUpdate);
+      Slice s_value = value;
+      thread->stats.FinishedOps(nullptr, db, 1, kUpdate, &key, &s_value);
     }
 
     char msg[100];
     snprintf(msg, sizeof(msg), "( updates:%" PRIu64 " found:%" PRIu64 ")",
-            readwrites_, found);
+             readwrites_, found);
     thread->stats.AddBytes(bytes);
     thread->stats.AddMessage(msg);
   }
@@ -8151,12 +8199,10 @@ const double bandwidth_in_one_hour[3600] = {
       Slice val = gen.Generate();
       if (FLAGS_num_column_families > 1) {
         s = db_with_cfh->db->Merge(write_options_,
-                                   db_with_cfh->GetCfh(key_rand), key,
-                                   val);
+                                   db_with_cfh->GetCfh(key_rand), key, val);
       } else {
-        s = db_with_cfh->db->Merge(write_options_,
-                                   db_with_cfh->db->DefaultColumnFamily(), key,
-                                   val);
+        s = db_with_cfh->db->Merge(
+            write_options_, db_with_cfh->db->DefaultColumnFamily(), key, val);
       }
 
       if (!s.ok()) {
@@ -8164,7 +8210,8 @@ const double bandwidth_in_one_hour[3600] = {
         exit(1);
       }
       bytes += key.size() + val.size();
-      thread->stats.FinishedOps(nullptr, db_with_cfh->db, 1, kMerge);
+      thread->stats.FinishedOps(nullptr, db_with_cfh->db, 1, kMerge, &key,
+                                &val);
     }
 
     // Print some statistics
@@ -8200,17 +8247,17 @@ const double bandwidth_in_one_hour[3600] = {
       bool do_merge = int(thread->rand.Next() % 100) < FLAGS_mergereadpercent;
 
       if (do_merge) {
-        Status s = db->Merge(write_options_, key, gen.Generate());
+        Slice s_val = gen.Generate();
+        Status s = db->Merge(write_options_, key, s_val);
         if (!s.ok()) {
           fprintf(stderr, "merge error: %s\n", s.ToString().c_str());
           exit(1);
         }
         num_merges++;
-        thread->stats.FinishedOps(nullptr, db, 1, kMerge);
+        thread->stats.FinishedOps(nullptr, db, 1, kMerge, &key, &s_val);
       } else {
         Status s = db->Get(read_options_, key, &value);
-        if (value.length() > max_length)
-          max_length = value.length();
+        if (value.length() > max_length) max_length = value.length();
 
         if (!s.ok() && !s.IsNotFound()) {
           fprintf(stderr, "get error: %s\n", s.ToString().c_str());
@@ -8220,7 +8267,8 @@ const double bandwidth_in_one_hour[3600] = {
           num_hits++;
         }
         num_gets++;
-        thread->stats.FinishedOps(nullptr, db, 1, kRead);
+        Slice s_val = value;
+        thread->stats.FinishedOps(nullptr, db, 1, kRead, &key, &s_val);
       }
     }
 
@@ -8255,6 +8303,7 @@ const double bandwidth_in_one_hour[3600] = {
       GenerateKeyFromInt(i, FLAGS_num, &key);
       iter->Seek(key);
       assert(iter->Valid() && iter->key() == key);
+      // TODO
       thread->stats.FinishedOps(nullptr, db, 1, kSeek);
 
       for (int j = 0; j < FLAGS_seek_nexts && i + 1 < FLAGS_num; ++j) {
@@ -8265,6 +8314,7 @@ const double bandwidth_in_one_hour[3600] = {
         }
         GenerateKeyFromInt(++i, FLAGS_num, &key);
         assert(iter->Valid() && iter->key() == key);
+        // TODO
         thread->stats.FinishedOps(nullptr, db, 1, kSeek);
       }
 
@@ -8479,9 +8529,8 @@ const double bandwidth_in_one_hour[3600] = {
       return;
     }
 
-    Status s =
-        RandomTransactionInserter::Verify(db_.db,
-                            static_cast<uint16_t>(FLAGS_transaction_sets));
+    Status s = RandomTransactionInserter::Verify(
+        db_.db, static_cast<uint16_t>(FLAGS_transaction_sets));
 
     if (s.ok()) {
       fprintf(stdout, "RandomTransactionVerify Success.\n");
@@ -8616,14 +8665,18 @@ const double bandwidth_in_one_hour[3600] = {
         if (do_deletion) {
           bytes += iter->key().size();
           if (KeyExpired(timestamp_emulator_.get(), iter->key())) {
-            thread->stats.FinishedOps(&db_, db_.db, 1, kDelete);
+            Slice s_key = iter->key();
+            thread->stats.FinishedOps(&db_, db_.db, 1, kDelete, &s_key,
+                                      nullptr);
             db_.db->Delete(write_options_, iter->key());
           } else {
             break;
           }
         } else {
           bytes += iter->key().size() + iter->value().size();
-          thread->stats.FinishedOps(&db_, db_.db, 1, kRead);
+          Slice s_key = iter->key();
+          Slice s_val = iter->value();
+          thread->stats.FinishedOps(&db_, db_.db, 1, kRead, &s_key, &s_val);
           Slice value = iter->value();
           memcpy(value_buffer, value.data(),
                  std::min(value.size(), sizeof(value_buffer)));
@@ -8697,13 +8750,13 @@ const double bandwidth_in_one_hour[3600] = {
         ErrorExit();
       }
       bytes = key.size() + val.size();
-      thread->stats.FinishedOps(&db_, db_.db, 1, kWrite);
+      thread->stats.FinishedOps(&db_, db_.db, 1, kWrite, &key, &val);
       thread->stats.AddBytes(bytes);
 
       if (FLAGS_benchmark_write_rate_limit > 0) {
-        write_rate_limiter->Request(
-            key.size() + val.size(), Env::IO_HIGH,
-            nullptr /* stats */, RateLimiter::OpType::kWrite);
+        write_rate_limiter->Request(key.size() + val.size(), Env::IO_HIGH,
+                                    nullptr /* stats */,
+                                    RateLimiter::OpType::kWrite);
       }
     }
   }
@@ -9142,7 +9195,7 @@ int db_bench_tool(int argc, char** argv) {
   }
 
   FLAGS_compression_type_e =
-    StringToCompressionType(FLAGS_compression_type.c_str());
+      StringToCompressionType(FLAGS_compression_type.c_str());
 
   FLAGS_wal_compression_e =
       StringToCompressionType(FLAGS_wal_compression.c_str());
@@ -9153,7 +9206,7 @@ int db_bench_tool(int argc, char** argv) {
 #ifndef ROCKSDB_LITE
   // Stacked BlobDB
   FLAGS_blob_db_compression_type_e =
-    StringToCompressionType(FLAGS_blob_db_compression_type.c_str());
+      StringToCompressionType(FLAGS_blob_db_compression_type.c_str());
 
   int env_opts = !FLAGS_env_uri.empty() + !FLAGS_fs_uri.empty();
   if (env_opts > 1) {
@@ -9222,7 +9275,7 @@ int db_bench_tool(int argc, char** argv) {
   }
 
   FLAGS_value_size_distribution_type_e =
-    StringToDistributionType(FLAGS_value_size_distribution_type.c_str());
+      StringToDistributionType(FLAGS_value_size_distribution_type.c_str());
 
   // Note options sanitization may increase thread pool sizes according to
   // max_background_flushes/max_background_compactions/max_background_jobs

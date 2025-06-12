@@ -28,7 +28,6 @@
 #include "rocksdb/cleanable.h"
 
 namespace ROCKSDB_NAMESPACE {
-
 class Slice {
  public:
   // Create an empty slice.
