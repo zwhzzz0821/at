@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "db/db_impl/db_impl.h"
@@ -23,10 +24,9 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table_properties.h"
-#include "rocksdb/thread_status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
-#include "rocksdb/utilities/write_batch_with_index.h"
 #include "system_metric_getter.h"
+#include "zipfian_predictor.h"
 namespace ROCKSDB_NAMESPACE {
 
 typedef std::vector<double> LSM_STATE;
@@ -44,13 +44,6 @@ enum DistributionType : unsigned char { kFixed = 0, kUniform, kNormal };
 
 enum BenchSeqType : int { kSeq = 0, kRandom = 1, kSeqUnknown = 2 };
 
-struct DistributionScore {
-  double zipfian_score_ = 0;  // Zipfian distribution score
-  double slope_ = 0;
-  double r_squared_ = 0;  // R-squared value of the linear regression
-  double expect_slope_ = 0;
-}
-
 struct TetrisMetrics {
   double throughput_;        // MB/s
   double p99_read_latency_;  // ms
@@ -61,15 +54,14 @@ struct TetrisMetrics {
   double read_write_ratio_;
   double io_intensity_;
   uint64_t compaction_granularity_;
-  double key_value_size_distribution_;  // not implemented yet
-  double cpu_usage_;                    // %
-  double mem_usage_;                    // %
-  double memtable_size_;                // MB
-  uint64_t bloom_filter_size_;          // MB
-  double seq_score_ = 0;                // sequential score
-  double rw_ratio_score_ = 0;           // read write ratio score
-  double distribution_score_ = 0;       // distribution score
-
+  double key_value_size_distribution_;               // not implemented yet
+  double cpu_usage_;                                 // %
+  double mem_usage_;                                 // %
+  double memtable_size_;                             // MB
+  uint64_t bloom_filter_size_;                       // MB
+  double seq_score_ = 0;                             // sequential score
+  double rw_ratio_score_ = 0;                        // read write ratio score
+  ZipfianPredictionResult zipfian_predictor_result;  // distribution score
   std::string ToString() {
     return "TetrisMetrics: throughput=" + std::to_string(throughput_) + "\n" +
            "p99_read_latency=" + std::to_string(p99_read_latency_) + "\n" +
@@ -88,7 +80,8 @@ struct TetrisMetrics {
            "bloom_filter_size=" + std::to_string(bloom_filter_size_) + "\n" +
            "seq_score=" + std::to_string(seq_score_) + "\n" +
            "rw_ratio_score=" + std::to_string(rw_ratio_score_) + "\n" +
-           "distribution_score=" + std::to_string(distribution_score_) + "\n";
+           "zipfian_predictor_result=" + zipfian_predictor_result.ToString() +
+           "\n";
   }
 };
 
@@ -183,7 +176,8 @@ class ReporterAgent {
   std::mutex mutex_;
   // will notify on stop
   uint64_t total_key_num_ = 0;
-  Slice last_key_;
+  std::string last_key_;
+  std::unordered_map<std::string, uint64_t> key_distribution_map_;
   uint64_t sequnencial_key_num_ = 0;  // number of sequential keys
   uint64_t key_num_in_seq_ = 0;
   uint8_t seq_ascending_ =
@@ -195,6 +189,7 @@ class ReporterAgent {
   bool stop_;
   TetrisMetrics current_metrics_;
   uint64_t time_started;
+  static const uint64_t key_num_threshold_ = 1000;
   void SleepAndReport() {
     time_started = env_->NowMicros();
     while (true) {
@@ -570,6 +565,8 @@ class ReporterTetris : public ReporterAgent {
     // compaction granularity
     metrics.compaction_granularity_ = GetCompactionGranularity();
     // key-value size distribution TODO
+    read_opt_size_sum_ = 0;   // reset read op
+    write_opt_size_sum_ = 0;  // reset write op
     // CPU usage 从proc中获取
     metrics.cpu_usage_ = getCpuUsage();
     // MEM usage 从proc中获取
@@ -579,9 +576,16 @@ class ReporterTetris : public ReporterAgent {
         static_cast<double>(GetMemtableSize()) / (1024 * 1024);  // MB
     // bloom filter size
     metrics.bloom_filter_size_ = GetFilterSize();
-
+    // seq score
+    metrics.seq_score_ = current_metrics_.seq_score_;
+    // rw ratio
+    metrics.rw_ratio_score_ = current_metrics_.read_write_ratio_;
+    // zpifian
+    mutex_.lock();
+    metrics.zipfian_predictor_result = PredictZipfian(key_distribution_map_);
+    mutex_.unlock();
     // finished
-    current_metrics_ = metrics;
+    current_metrics_ = std::move(metrics);
   }
 };
 

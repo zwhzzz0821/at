@@ -3,11 +3,13 @@
 //
 
 #include <cassert>
+#include <mutex>
 
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
 #include "rocksdb/utilities/report_agent.h"
+#include "rocksdb/utilities/zipfian_predictor.h"
 
 namespace ROCKSDB_NAMESPACE {
 ReporterAgent::~ReporterAgent() {
@@ -31,11 +33,19 @@ Status ReporterAgent::ReportLine(int secs_elapsed,
   return s;
 }
 
+void print_hex(const std::string& s) {
+  for (unsigned char c : s) {
+    printf("%02x ", c);  // 每个字节以两位十六进制形式输出
+  }
+  printf("\n");
+}
+
 void ReporterAgent::UpdateSeqScore(Slice* key, Slice* value) {
   if (key == nullptr) {
     return;  // no key, do nothing
   }
-  if (seq_ascending_ == 0) {
+  mutex_.lock();
+  if (seq_ascending_ == 0 && !last_key_.empty()) {
     if (key->compare(last_key_) < 0) {
       seq_ascending_ = 2;  // descending
     } else if (key->compare(last_key_) > 0) {
@@ -60,13 +70,15 @@ void ReporterAgent::UpdateSeqScore(Slice* key, Slice* value) {
     }
   }
   key_num_in_seq_++;
-  last_key_ = *key;
+  last_key_ = key->ToString();
   current_metrics_.seq_score_ = static_cast<double>(sequnencial_key_num_) /
                                 static_cast<double>(key_num_in_seq_);
+  mutex_.unlock();
 }
 
 void ReporterAgent::UpdateRwRatioScore(OperationType op_type, Slice* key,
                                        Slice* value) {
+  mutex_.lock();
   if (key == nullptr) {
     return;  // no key or value, do nothing
   }
@@ -85,17 +97,24 @@ void ReporterAgent::UpdateRwRatioScore(OperationType op_type, Slice* key,
   }
 
   if (write_opt_size_sum_ == 0) {
-    current_metrics_.rw_ratio_score_ = std::numeric_limits<double>::max();
+    current_metrics_.rw_ratio_score_ =
+        std::numeric_limits<double>::max();  // means only read
   } else {
     current_metrics_.rw_ratio_score_ =
         static_cast<double>(read_opt_size_sum_) / write_opt_size_sum_;
   }
+  mutex_.unlock();
 }
+
 void ReporterAgent::UpdateDistributionScore(Slice* key, Slice* value) {
   // TODO
-  if (key->size() == 0 || value->size() == 0) {
-    return;
+  mutex_.lock();
+  std::string string_key = key->ToString();
+  if (key_distribution_map_.size() > 1000) {
+    key_distribution_map_.clear();
   }
+  key_distribution_map_[string_key]++;
+  mutex_.unlock();
 }
 
 const TetrisMetrics& ReporterAgent::GetMetrics() const {
