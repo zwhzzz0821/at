@@ -106,14 +106,6 @@ static inline ZipfianPredictionResult PredictZipfian(
               << std::endl;
     return {0.0, 0.0, 0.0, -1.0};
   }
-  std::cout << "debug start" << std::endl;
-  for (const auto& [str, count] : key_access_counts) {
-    // std::cout << str << " " << count << std::endl;
-    if (count > 1) {
-      std::cout << str << " " << count << std::endl;
-    }
-  }
-  std::cout << "debug finished" << std::endl;
   uint64_t total_accesses = std::accumulate(
       key_access_counts.begin(), key_access_counts.end(), 0LL,
       [](uint64_t sum, const std::pair<std::string, uint64_t>& p) {

@@ -146,12 +146,17 @@ class ReporterAgent {
                          Slice* key = nullptr, Slice* value = nullptr) {
     total_ops_done_.fetch_add(num_ops);
     if (key != nullptr) {
+      mutex_.lock();
       total_key_num_ += 1;
       UpdateSeqScore(key, value);
       UpdateRwRatioScore(op_type, key, value);
       UpdateDistributionScore(key, value);
+      mutex_.unlock();
+      // update latency for per op
     }
   }
+  void AccessOpLatency(uint64_t lantency,
+                       OperationType op_type = OperationType::kOthers);
   void ReportFinishedOps(int64_t num_ops, std::vector<Slice*> keys,
                          std::vector<Slice*> values,
                          OperationType op_type = OperationType::kOthers) {
@@ -184,6 +189,9 @@ class ReporterAgent {
       0;  // 1 if the last key is ascending, 2 if descending, 0 no order now
   uint64_t read_opt_size_sum_ = 0;
   uint64_t write_opt_size_sum_ = 0;
+  std::vector<uint64_t> op_latency_list_;  // sliding window of window_size_ ops
+  static constexpr uint64_t window_size_ = 1000;
+  static constexpr double k_multiplier_ = 2;
   std::condition_variable stop_cv_;
   HistogramMapPtr hist_;
   bool stop_;
@@ -203,8 +211,6 @@ class ReporterAgent {
         }
         // else -> timeout, which means time for a report!
       }
-      std::cout << "Reporting at " << env_->NowMicros() - time_started
-                << " micros" << std::endl;
       auto total_ops_done_snapshot = total_ops_done_.load();
       // round the seconds elapsed
       //      auto secs_elapsed = env_->NowMicros();
@@ -428,15 +434,23 @@ class ReporterTetris : public ReporterAgent {
   VersionStorageInfo* vfs;
   uint64_t read_count_ = 0;
   uint64_t write_count_ = 0;
+  bool applying_changes = false;
 
+  void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
   void DetectAndTuning(int secs_elapsed) override {
     // This reporter does not support tuning now
     // just update the system info
     UpdateMetric(secs_elapsed);
+    // detect lantency spike
+    AutoTune();
+    // when test, dont print
     std::cout << current_metrics_.ToString() << std::endl;
+    std::cout << "write buffer size: " << current_opt.write_buffer_size
+              << std::endl;
   }
 
   void UpdateSystemInfo() {
+    assert(db_ptr != nullptr);
     current_opt = db_ptr->GetOptions();
     version =
         db_ptr->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
@@ -526,6 +540,16 @@ class ReporterTetris : public ReporterAgent {
     return static_cast<double>(total_ops_done_snapshot - last_report_) /
            secs_elapsed;  // ops/sec
   }
+  /*
+   * Detect latency spike
+   * return true if latency spike is detected
+   * return false if latency spike is not detected
+   */
+  bool DetectLatencySpike();
+  /*
+   * Auto tune the system
+   */
+  void AutoTune();
 
  public:
   ReporterTetris(DBImpl* running_db, Env* env, const std::string& fname,

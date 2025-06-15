@@ -1,0 +1,11 @@
+./db_bench \
+  --benchmarks=fillrandom \
+  --num=300000000 \
+  --key_size=16 \
+  --use_existing_db=0 \
+  --value_size=100 \
+  --statistics=true \
+  --histogram=true \
+  --compression_type=none \
+  --db=/home/zwh/lib/at/db \
+  --duration=600 

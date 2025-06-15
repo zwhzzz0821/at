@@ -2,13 +2,14 @@
 // Created by jinghuan on 5/24/21.
 //
 
+#include "rocksdb/utilities/report_agent.h"
+
 #include <cassert>
 #include <mutex>
 
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
-#include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/utilities/zipfian_predictor.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -24,6 +25,27 @@ void ReporterAgent::InsertNewTuningPoints(ChangePoint point) {
   std::cout << "can't use change point @ " << point.change_timing
             << " Due to using default reporter" << std::endl;
 };
+Status update_db_options(
+    DBImpl* running_db_,
+    std::unordered_map<std::string, std::string>* new_db_options,
+    bool* applying_changes, Env* /*env*/) {
+  *applying_changes = true;
+  Status s = running_db_->SetDBOptions(*new_db_options);
+  free(new_db_options);
+  *applying_changes = false;
+  return s;
+}
+
+Status update_cf_options(
+    DBImpl* running_db_,
+    std::unordered_map<std::string, std::string>* new_cf_options,
+    bool* applying_changes, Env* /*env*/) {
+  *applying_changes = true;
+  Status s = running_db_->SetOptions(*new_cf_options);
+  free(new_cf_options);
+  *applying_changes = false;
+  return s;
+}
 void ReporterAgent::DetectAndTuning(int /*secs_elapsed*/) {}
 Status ReporterAgent::ReportLine(int secs_elapsed,
                                  int total_ops_done_snapshot) {
@@ -44,7 +66,6 @@ void ReporterAgent::UpdateSeqScore(Slice* key, Slice* value) {
   if (key == nullptr) {
     return;  // no key, do nothing
   }
-  mutex_.lock();
   if (seq_ascending_ == 0 && !last_key_.empty()) {
     if (key->compare(last_key_) < 0) {
       seq_ascending_ = 2;  // descending
@@ -73,12 +94,10 @@ void ReporterAgent::UpdateSeqScore(Slice* key, Slice* value) {
   last_key_ = key->ToString();
   current_metrics_.seq_score_ = static_cast<double>(sequnencial_key_num_) /
                                 static_cast<double>(key_num_in_seq_);
-  mutex_.unlock();
 }
 
 void ReporterAgent::UpdateRwRatioScore(OperationType op_type, Slice* key,
                                        Slice* value) {
-  mutex_.lock();
   if (key == nullptr) {
     return;  // no key or value, do nothing
   }
@@ -103,18 +122,120 @@ void ReporterAgent::UpdateRwRatioScore(OperationType op_type, Slice* key,
     current_metrics_.rw_ratio_score_ =
         static_cast<double>(read_opt_size_sum_) / write_opt_size_sum_;
   }
-  mutex_.unlock();
 }
 
 void ReporterAgent::UpdateDistributionScore(Slice* key, Slice* value) {
   // TODO
-  mutex_.lock();
   std::string string_key = key->ToString();
   if (key_distribution_map_.size() > 1000) {
     key_distribution_map_.clear();
   }
   key_distribution_map_[string_key]++;
+}
+
+void ReporterAgent::AccessOpLatency(uint64_t latency, OperationType op_type) {
+  mutex_.lock();
+  if (op_type == kRead || op_type == kSeek || op_type == kWrite ||
+      op_type == kUpdate || op_type == kDelete) {
+    if (op_latency_list_.size() < window_size_) {
+      op_latency_list_.push_back(latency);
+    } else {
+      op_latency_list_.erase(op_latency_list_.begin());
+      op_latency_list_.push_back(latency);
+    }
+  }
   mutex_.unlock();
+}
+
+bool ReporterTetris::DetectLatencySpike() {
+  mutex_.lock();
+  if (op_latency_list_.size() < window_size_) {
+    mutex_.unlock();
+    return false;
+  }
+  auto avg_latency =
+      std::accumulate(op_latency_list_.begin(), op_latency_list_.end(), 0.0) /
+      op_latency_list_.size();
+  auto std_latency = std::sqrt(
+      std::accumulate(op_latency_list_.begin(), op_latency_list_.end(), 0.0,
+                      [avg_latency](double sum, double x) {
+                        return sum + (x - avg_latency) * (x - avg_latency);
+                      }) /
+      op_latency_list_.size());
+  auto spike_threshold = avg_latency + k_multiplier_ * std_latency;
+  if (op_latency_list_.back() > spike_threshold) {
+    std::cout << "Latency spike detected" << std::endl;
+    mutex_.unlock();
+    return true;
+  }
+  mutex_.unlock();
+  return false;
+}
+
+void ReporterTetris::AutoTune() {
+  if (!DetectLatencySpike()) {
+    return;
+  } else {
+    // TODO: auto tune the system
+    std::cout << "Latency spike detected, auto tuning the system" << std::endl;
+    std::vector<ChangePoint> change_points;
+    // change memtable size according to the seq score
+    // TODO: refract this
+    if (current_metrics_.seq_score_ <= 0.4) {
+      ChangePoint cp;
+      cp.opt = "write_buffer_size";
+      cp.db_width = false;
+      uint64_t memtable_size = current_opt.write_buffer_size;
+      cp.value = std::to_string(std::min(memtable_size * 2ull, 16ull << 30));
+      if (cp.value != std::to_string(memtable_size)) {
+        change_points.push_back(cp);
+      }
+    } else if (current_metrics_.seq_score_ >= 0.6) {
+      ChangePoint cp;
+      cp.opt = "write_buffer_size";
+      cp.db_width = false;
+      uint64_t memtable_size = current_opt.write_buffer_size;
+      cp.value = std::to_string(std::max(memtable_size / 2ull, 64ull << 20));
+      if (cp.value != std::to_string(memtable_size)) {
+        change_points.push_back(cp);
+      }
+    }
+    // test not change option
+    ApplyChangePointsInstantly(&change_points);
+  }
+}
+
+void ReporterTetris::ApplyChangePointsInstantly(
+    std::vector<ChangePoint>* points) {
+  std::unordered_map<std::string, std::string>* new_cf_options;
+  std::unordered_map<std::string, std::string>* new_db_options;
+
+  new_cf_options = new std::unordered_map<std::string, std::string>();
+  new_db_options = new std::unordered_map<std::string, std::string>();
+  if (points->empty()) {
+    return;
+  }
+
+  for (auto point : *points) {
+    if (point.db_width) {
+      new_db_options->emplace(point.opt, point.value);
+    } else {
+      new_cf_options->emplace(point.opt, point.value);
+    }
+  }
+  points->clear();
+  Status s;
+  if (!new_db_options->empty()) {
+    //    std::thread t();
+    std::thread t(update_db_options, db_ptr, new_db_options, &applying_changes,
+                  env_);
+    t.detach();
+  }
+  if (!new_cf_options->empty()) {
+    std::thread t(update_cf_options, db_ptr, new_cf_options, &applying_changes,
+                  env_);
+    t.detach();
+  }
 }
 
 const TetrisMetrics& ReporterAgent::GetMetrics() const {
@@ -164,28 +285,6 @@ void ReporterAgentWithTuning::UseFEATTuner(bool TEA_enable, bool FEA_enable) {
                              &total_ops_done_, env_, tuning_gap_secs_,
                              TEA_enable, FEA_enable));
 };
-
-Status update_db_options(
-    DBImpl* running_db_,
-    std::unordered_map<std::string, std::string>* new_db_options,
-    bool* applying_changes, Env* /*env*/) {
-  *applying_changes = true;
-  Status s = running_db_->SetDBOptions(*new_db_options);
-  free(new_db_options);
-  *applying_changes = false;
-  return s;
-}
-
-Status update_cf_options(
-    DBImpl* running_db_,
-    std::unordered_map<std::string, std::string>* new_cf_options,
-    bool* applying_changes, Env* /*env*/) {
-  *applying_changes = true;
-  Status s = running_db_->SetOptions(*new_cf_options);
-  free(new_cf_options);
-  *applying_changes = false;
-  return s;
-}
 
 Status SILK_pause_compaction(DBImpl* running_db_, bool* stopped) {
   Status s = running_db_->PauseBackgroundWork();

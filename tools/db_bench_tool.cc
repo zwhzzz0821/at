@@ -2192,7 +2192,7 @@ class Stats {
     if (FLAGS_histogram) {
       uint64_t now = clock_->NowMicros();
       uint64_t micros = now - last_op_finish_;
-
+      reporter_agent_->AccessOpLatency(micros, op_type);
       if (hist_.find(op_type) == hist_.end()) {
         auto hist_temp = std::make_shared<HistogramImpl>();
         hist_.insert({op_type, std::move(hist_temp)});
