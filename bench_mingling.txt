@@ -8,4 +8,4 @@
   --histogram=true \
   --compression_type=none \
   --db=../tmp/db \
-  --duration=600 
+  --duration=600 > ../test_data_dir/tune.log
