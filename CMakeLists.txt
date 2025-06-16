@@ -853,6 +853,7 @@ set(SOURCES
         utilities/debug.cc
         utilities/DOTA/report_agent.cc
         utilities/DOTA/DOTA_tuner.cc
+        utilities/Tetris/TetrisTuner.cc
         utilities/env_mirror.cc
         utilities/env_timed.cc
         utilities/fault_injection_env.cc

@@ -116,13 +116,13 @@ def plot_throughput_over_time(parsed_data):
 
     # 显示图表
     plt.tight_layout() # 调整布局以避免标签重叠
-    plt.savefig("time-th.png")
+    plt.savefig("test_data_dir/time-th.png")
     plt.show()
 
 if __name__ == "__main__":
     # 请将 'your_log_file.log' 替换为你的实际日志文件路径
     # 示例: log_file = "/path/to/your/db_bench_log.txt"
-    log_file = "tune.log"
+    log_file = "test_data_dir/tune.log"
 
     # 为了方便测试，如果文件不存在，我们创建一个模拟文件
     if not os.path.exists(log_file):

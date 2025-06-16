@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
-#include <mutex>
 #include <numeric>
 #include <string>
 #include <unordered_map>

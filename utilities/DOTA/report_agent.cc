@@ -179,29 +179,7 @@ void ReporterTetris::AutoTune() {
     std::cout << "Latency spike detected, auto tuning the system" << std::endl;
     std::vector<ChangePoint> change_points;
     // change memtable size according to the seq score
-    // TODO: refract this
-    if (current_metrics_.seq_score_ <= 0.4) {
-      ChangePoint cp;
-      cp.opt = "write_buffer_size";
-      cp.db_width = false;
-      uint64_t memtable_size = current_opt.write_buffer_size;
-      cp.value = std::to_string(std::min(memtable_size * 2ull, 512ull << 20));
-      if (cp.value != std::to_string(memtable_size)) {
-        change_points.push_back(cp);
-      }
-    } else if (current_metrics_.seq_score_ >= 0.6) {
-      ChangePoint cp;
-      cp.opt = "write_buffer_size";
-      cp.db_width = false;
-      uint64_t memtable_size = current_opt.write_buffer_size;
-      cp.value = std::to_string(std::max(memtable_size / 2ull, 64ull << 20));
-      if (cp.value != std::to_string(memtable_size)) {
-        change_points.push_back(cp);
-      }
-    }
-    if (change_points.empty()) {
-      return;
-    }
+    tuner_->AutoTuneByMetric(current_metrics_, change_points);
     // test not change option
     ApplyChangePointsInstantly(&change_points);
   }
