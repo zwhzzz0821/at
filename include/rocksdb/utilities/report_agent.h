@@ -5,6 +5,7 @@
 #ifndef ROCKSDB_REPORTER_H
 #define ROCKSDB_REPORTER_H
 #include <fcntl.h>
+#include <sys/types.h>
 
 #include <atomic>
 #include <cassert>
@@ -15,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -59,6 +61,20 @@ enum OperationType : unsigned char {
   kOthers
 };
 
+enum LatencySpike : uint8_t { kNoSpike = 0, kSmallSpike, kBigSpike };
+
+constexpr std::string_view LatencySpikeToString(LatencySpike latency_spike) {
+  switch (latency_spike) {
+    case kNoSpike:
+      return "kNoSpike";
+    case kSmallSpike:
+      return "kSmallSpike";
+    case kBigSpike:
+      return "kBigSpike";
+    default:
+      return "unknown";
+  }
+}
 typedef std::unordered_map<OperationType, std::shared_ptr<HistogramImpl>,
                            std::hash<unsigned char>>* HistogramMapPtr;
 
@@ -151,7 +167,8 @@ class ReporterAgent {
   uint64_t write_opt_size_sum_ = 0;
   std::vector<uint64_t> op_latency_list_;  // sliding window of window_size_ ops
   static constexpr uint64_t window_size_ = 1000;
-  static constexpr double k_multiplier_ = 2;
+  static constexpr double k_small_multiplier_ = 2;
+  static constexpr double k_big_multiplier_ = 10;
   std::condition_variable stop_cv_;
   HistogramMapPtr hist_;
   bool stop_;
@@ -405,9 +422,9 @@ class ReporterTetris : public ReporterAgent {
     // detect lantency spike
     AutoTune();
     // when test, dont print
-    std::cout << current_metrics_.ToString() << std::endl;
-    std::cout << "write buffer size: " << current_opt.write_buffer_size
-              << std::endl;
+    // std::cout << current_metrics_.ToString() << std::endl;
+    // std::cout << "write buffer size: " << current_opt.write_buffer_size
+    //           << std::endl;
   }
 
   void UpdateSystemInfo() {
@@ -423,12 +440,10 @@ class ReporterTetris : public ReporterAgent {
     OperationType op_type = kRead;
     auto hist = hist_->find(op_type);
     if (hist == hist_->end()) {
-      std::cout << "No histogram for read operation" << std::endl;
       return 0.0;
     }
     auto latency = hist->second->Percentile(percentile);
     if (latency < 0) {
-      std::cout << "No p99 latency for read operation" << std::endl;
       return 0.0;
     }
     return latency / 1000.0;  // convert to ms
@@ -506,7 +521,7 @@ class ReporterTetris : public ReporterAgent {
    * return true if latency spike is detected
    * return false if latency spike is not detected
    */
-  bool DetectLatencySpike();
+  LatencySpike DetectLatencySpike();
   /*
    * Auto tune the system
    */
@@ -525,7 +540,6 @@ class ReporterTetris : public ReporterAgent {
       tuner_ = std::make_unique<TetrisTuner>(running_db);
     }
   }
-
   Status ReportLine(int secs_elapsed, int total_ops_done_snapshot) override;
 
   const TetrisMetrics& GetMetrics() const override { return current_metrics_; }

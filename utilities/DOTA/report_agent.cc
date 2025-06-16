@@ -10,6 +10,7 @@
 #include "rocksdb/utilities/DOTA_tuner.h"
 #include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/utilities/zipfian_predictor.h"
+#include "trace_replay/block_cache_tracer.h"
 
 namespace ROCKSDB_NAMESPACE {
 ReporterAgent::~ReporterAgent() {
@@ -137,46 +138,57 @@ void ReporterAgent::AccessOpLatency(uint64_t latency, OperationType op_type) {
   if (op_type == kRead || op_type == kSeek || op_type == kWrite ||
       op_type == kUpdate || op_type == kDelete) {
     if (op_latency_list_.size() < window_size_) {
-      op_latency_list_.push_back(latency);
+      op_latency_list_.emplace_back(latency);
     } else {
       op_latency_list_.erase(op_latency_list_.begin());
-      op_latency_list_.push_back(latency);
+      op_latency_list_.emplace_back(latency);
     }
   }
   mutex_.unlock();
 }
 
-bool ReporterTetris::DetectLatencySpike() {
+LatencySpike ReporterTetris::DetectLatencySpike() {
   mutex_.lock();
   if (op_latency_list_.size() < window_size_) {
     mutex_.unlock();
-    return false;
+    return kNoSpike;
   }
   auto avg_latency =
       std::accumulate(op_latency_list_.begin(), op_latency_list_.end(), 0.0) /
       op_latency_list_.size();
   auto std_latency = std::sqrt(
       std::accumulate(op_latency_list_.begin(), op_latency_list_.end(), 0.0,
-                      [avg_latency](double sum, double x) {
+                      [avg_latency](double sum, uint64_t x) {
                         return sum + (x - avg_latency) * (x - avg_latency);
                       }) /
       op_latency_list_.size());
-  auto spike_threshold = avg_latency + k_multiplier_ * std_latency;
-  if (op_latency_list_.back() > spike_threshold) {
-    std::cout << "Latency spike detected" << std::endl;
+  const auto small_spike_threshold =
+      avg_latency + k_small_multiplier_ * std_latency;
+  const auto big_spike_threshold =
+      avg_latency + k_big_multiplier_ * std_latency;
+  if (op_latency_list_.back() > small_spike_threshold &&
+      op_latency_list_.back() < kMicrosInSecond /*<= 1s*/) {
+    op_latency_list_.back() = kSmallSpike;
     mutex_.unlock();
-    return true;
+    return kSmallSpike;
+  } else if (op_latency_list_.back() >= big_spike_threshold &&
+             op_latency_list_.back() >= kMicrosInSecond) {
+    op_latency_list_.back() = kBigSpike;
+    mutex_.unlock();
+    return kBigSpike;
   }
   mutex_.unlock();
-  return false;
+  return kNoSpike;
 }
 
 void ReporterTetris::AutoTune() {
-  if (!DetectLatencySpike()) {
+  LatencySpike latency_spike = DetectLatencySpike();
+  if (latency_spike == kNoSpike) {
     return;
   } else {
     // TODO: auto tune the system
-    std::cout << "Latency spike detected, auto tuning the system" << std::endl;
+    std::cout << "Latency spike detected, type is "
+              << LatencySpikeToString(latency_spike) << std::endl;
     std::vector<ChangePoint> change_points;
     // change memtable size according to the seq score
     tuner_->AutoTuneByMetric(current_metrics_, change_points);
