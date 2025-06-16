@@ -62,8 +62,10 @@ struct TetrisMetrics {
   double seq_score_ = 0;                             // sequential score
   double rw_ratio_score_ = 0;                        // read write ratio score
   ZipfianPredictionResult zipfian_predictor_result;  // distribution score
+  uint64_t update_time_ = 0;
   std::string ToString() {
-    return "TetrisMetrics: throughput=" + std::to_string(throughput_) + "\n" +
+    return "TetrisMetrics: update_time=" + std::to_string(update_time_) + "\n" +
+           "throughput=" + std::to_string(throughput_) + "\n" +
            "p99_read_latency=" + std::to_string(p99_read_latency_) + "\n" +
            "p999_read_latency=" + std::to_string(p999_read_latency_) + "\n" +
            "p99_write_latency=" + std::to_string(p99_write_latency_) + "\n" +
@@ -535,9 +537,9 @@ class ReporterTetris : public ReporterAgent {
   }
   double GetThroughtput(int secs_elapsed, int total_ops_done_snapshot) {
     if (secs_elapsed == 0) {
-      return 0.0;
+      return total_ops_done_snapshot;
     }
-    return static_cast<double>(total_ops_done_snapshot - last_report_) /
+    return static_cast<double>(total_ops_done_snapshot) /
            secs_elapsed;  // ops/sec
   }
   /*
@@ -571,6 +573,7 @@ class ReporterTetris : public ReporterAgent {
   void UpdateMetric(int secs_elapsed) override {
     UpdateSystemInfo();
     TetrisMetrics metrics;
+    metrics.update_time_ = env_->NowMicros() - time_started;
     // throughput
     metrics.throughput_ = GetThroughtput(secs_elapsed, total_ops_done_.load());
     // P99 latency
@@ -605,9 +608,9 @@ class ReporterTetris : public ReporterAgent {
     // rw ratio
     metrics.rw_ratio_score_ = current_metrics_.read_write_ratio_;
     // zpifian
-    mutex_.lock();
-    metrics.zipfian_predictor_result = PredictZipfian(key_distribution_map_);
-    mutex_.unlock();
+    // mutex_.lock();
+    // metrics.zipfian_predictor_result = PredictZipfian(key_distribution_map_);
+    // mutex_.unlock();
     // finished
     current_metrics_ = std::move(metrics);
   }

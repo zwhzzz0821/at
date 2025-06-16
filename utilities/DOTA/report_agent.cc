@@ -2,14 +2,13 @@
 // Created by jinghuan on 5/24/21.
 //
 
-#include "rocksdb/utilities/report_agent.h"
-
 #include <cassert>
 #include <mutex>
 
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
+#include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/utilities/zipfian_predictor.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -186,7 +185,7 @@ void ReporterTetris::AutoTune() {
       cp.opt = "write_buffer_size";
       cp.db_width = false;
       uint64_t memtable_size = current_opt.write_buffer_size;
-      cp.value = std::to_string(std::min(memtable_size * 2ull, 16ull << 30));
+      cp.value = std::to_string(std::min(memtable_size * 2ull, 512ull << 20));
       if (cp.value != std::to_string(memtable_size)) {
         change_points.push_back(cp);
       }
@@ -199,6 +198,9 @@ void ReporterTetris::AutoTune() {
       if (cp.value != std::to_string(memtable_size)) {
         change_points.push_back(cp);
       }
+    }
+    if (change_points.empty()) {
+      return;
     }
     // test not change option
     ApplyChangePointsInstantly(&change_points);

@@ -97,3 +97,6 @@ third-party/folly/
 
 .cache/
 report.csv
+tmp/
+myenv/
+test_data_dir/

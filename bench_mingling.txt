@@ -7,5 +7,5 @@
   --statistics=true \
   --histogram=true \
   --compression_type=none \
-  --db=/home/zwh/lib/at/db \
+  --db=../tmp/db \
   --duration=600 
