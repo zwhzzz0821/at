@@ -242,6 +242,7 @@ class ReporterAgentWithTuning : public ReporterAgent {
   std::map<std::string, int> baseline_map;
   const int thread_num_upper_bound = 12;
   const int thread_num_lower_bound = 2;
+  bool applying_changes = false;
 
  public:
   const static unsigned long history_lsm_shape =
@@ -397,6 +398,7 @@ class ReporterTetris : public ReporterAgent {
   uint64_t write_count_ = 0;
   std::unique_ptr<TetrisTuner> tuner_;
   bool enable_tetris_ = false;
+  bool applying_changes = false;
 
   void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
   void DetectAndTuning(int secs_elapsed) override {

@@ -183,7 +183,6 @@ LatencySpike ReporterTetris::DetectLatencySpike() {
 }
 
 void ReporterTetris::AutoTune() {
-  std::cout << "AutoTune" << std::endl;
   LatencySpike latency_spike = DetectLatencySpike();
   if (latency_spike == kNoSpike) {
     return;
