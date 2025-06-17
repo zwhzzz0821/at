@@ -5,6 +5,7 @@
 #define TETRIS_TUNER_H
 
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 #include "db/column_family.h"
@@ -62,11 +63,12 @@ struct TetrisMetrics {
 };
 class TetrisTuner {
  public:
-  TetrisTuner(DBImpl* db_ptr) : db_ptr_(db_ptr) {
+  TetrisTuner(DBImpl* db_ptr, Env* env) : db_ptr_(db_ptr), env_(env) {
     current_opt_ = db_ptr->GetOptions();
-    env_ = db_ptr->GetEnv();
     last_tune_time_ = env_->NowMicros();
   }
+  TetrisTuner() = delete;
+  ~TetrisTuner() = default;
   void AutoTuneByMetric(const TetrisMetrics& current_metric,
                         std::vector<ChangePoint>& change_points,
                         LatencySpike& latency_spike);
@@ -77,6 +79,7 @@ class TetrisTuner {
                           std::vector<ChangePoint>& change_points);
   void TuneWhenBigSpike(const TetrisMetrics& current_metric,
                         std::vector<ChangePoint>& change_points);
+  void ResetToDefault(std::vector<ChangePoint>& change_points);
   void TuneWriteBufferSize(const std::string& target_value,
                            std::vector<ChangePoint>& change_points);
   void TuneMaxBufferNumber(const std::string& target_value,
@@ -108,6 +111,8 @@ class TetrisTuner {
   VersionStorageInfo* vfs_;
   ColumnFamilyData* cfd_;
   uint64_t last_tune_time_ = 0;
+  std::mutex mutex_;  // 使用普通互斥锁
+
   static constexpr double kSeqThreshold = 0.7;
   static constexpr double kRandomThreshold = 0.4;
   static constexpr uint64_t max_memtable_size = 1ull << 30;
@@ -120,6 +125,7 @@ class TetrisTuner {
   static constexpr uint64_t kWriteBufferSizeUpper = 1024 * 1024 * 1024;
   static constexpr uint64_t kWriteBufferSizeLower = 32 * 1024 * 1024;
   static constexpr uint64_t kWriteBufferSizeMinusFactor = 64 * 1024 * 1024;
+  static constexpr uint64_t kWriteBufferSizePlusFactor = 64 * 1024 * 1024;
   static constexpr int kMaxBackgroundJobsUpper = 16;
   static constexpr int kMaxBackgroundJobsLower = 1;
   static constexpr int kMaxBackgroundCompactionsUpper = 12;
@@ -127,6 +133,21 @@ class TetrisTuner {
   static constexpr uint64_t kCompactionReadaheadSizeUpper = 128 * 1024 * 1024;
   static constexpr uint64_t kCompactionReadaheadSizeLower = 2 * 1024 * 1024;
   static constexpr uint64_t kCompactionGranularityThreshold = 500;
+  static constexpr uint64_t kLevel0FileNumCompactionTriggerLower = 2;
+  static constexpr uint64_t kLevel0FileNumCompactionTriggerUpper = 10;
+
+  // 默认参数值
+  static constexpr uint64_t kDefaultWriteBufferSize = 67108864;  // 64MB
+  static constexpr int kDefaultMaxBackgroundFlushes = 1;
+  static constexpr int kDefaultMaxBackgroundJobs = 2;
+  static constexpr int kDefaultMaxBackgroundCompactions = -1;
+  static constexpr uint64_t kDefaultCompactionReadaheadSize = 2097152;  // 2MB
+  static constexpr int kDefaultLevel0SlowdownWritesTrigger = 20;
+  static constexpr int kDefaultLevel0StopWritesTrigger = 36;
+  static constexpr int kDefaultLevel0FileNumCompactionTrigger = 4;
+  static constexpr int kDefaultMaxWriteBufferNumber = 2;
+
+  static constexpr uint64_t kMicrosInSecond = 10000000;  // 10秒
 };
 }  // namespace ROCKSDB_NAMESPACE
 #endif  // TETRIS_TUNER_H

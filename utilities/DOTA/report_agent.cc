@@ -10,6 +10,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
+#include "rocksdb/utilities/TetrisTuner.h"
 #include "rocksdb/utilities/zipfian_predictor.h"
 #include "trace_replay/block_cache_tracer.h"
 
@@ -184,21 +185,22 @@ LatencySpike ReporterTetris::DetectLatencySpike() {
 
 void ReporterTetris::AutoTune() {
   LatencySpike latency_spike = DetectLatencySpike();
-  if (latency_spike == kNoSpike) {
-    return;
-  } else {
-    // TODO: auto tune the system
-    std::cout << "Latency spike detected, type is "
-              << LatencySpikeToString(latency_spike) << std::endl;
-    std::vector<ChangePoint> change_points;
-    // change memtable size according to the seq score
+  // TODO: auto tune the system
+  std::vector<ChangePoint> change_points;
+  // change memtable size according to the seq score
+  if (last_latency_spike_ != kNoSpike ||
+      (last_latency_spike_ == kNoSpike &&
+       latency_spike != last_latency_spike_)) {
     tuner_->AutoTuneByMetric(current_metrics_, change_points, latency_spike);
-    // test not change option
-    for (const auto& point : change_points) {
-      std::cout << "change point: " << point.ToString() << std::endl;
+    if (!change_points.empty()) {
+      last_latency_spike_ = latency_spike;
     }
-    ApplyChangePointsInstantly(&change_points);
   }
+  // test not change option
+  for (const auto& point : change_points) {
+    std::cout << "change point: " << point.ToString() << std::endl;
+  }
+  ApplyChangePointsInstantly(&change_points);
 }
 
 void ReporterTetris::ApplyChangePointsInstantly(

@@ -399,6 +399,7 @@ class ReporterTetris : public ReporterAgent {
   std::unique_ptr<TetrisTuner> tuner_;
   bool enable_tetris_ = false;
   bool applying_changes = false;
+  LatencySpike last_latency_spike_ = kNoSpike;
 
   void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
   void DetectAndTuning(int secs_elapsed) override {
@@ -417,7 +418,6 @@ class ReporterTetris : public ReporterAgent {
 
   void UpdateSystemInfo() {
     assert(db_ptr != nullptr);
-    std::cout << "no point" << std::endl;
     current_opt = db_ptr->GetOptions();
     version =
         db_ptr->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
@@ -528,9 +528,10 @@ class ReporterTetris : public ReporterAgent {
 
     } else {
       db_ptr = reinterpret_cast<DBImpl*>(running_db);
-      tuner_ = std::make_unique<TetrisTuner>(running_db);
+      tuner_ = std::make_unique<TetrisTuner>(running_db, env);
     }
   }
+  ~ReporterTetris() = default;
   Status ReportLine(int secs_elapsed, int total_ops_done_snapshot) override;
 
   const TetrisMetrics& GetMetrics() const override { return current_metrics_; }

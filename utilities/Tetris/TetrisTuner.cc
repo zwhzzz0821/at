@@ -12,18 +12,23 @@ namespace ROCKSDB_NAMESPACE {
 void TetrisTuner::AutoTuneByMetric(const TetrisMetrics& current_metric,
                                    std::vector<ChangePoint>& change_points,
                                    LatencySpike& latency_spike) {
+  std::lock_guard<std::mutex> lock(mutex_);
+
   uint64_t now_tune_time = env_->NowMicros();
-  if (now_tune_time - last_tune_time_ < kMicrosInSecond ||
-      latency_spike == LatencySpike::kNoSpike) {
+  if (now_tune_time - last_tune_time_ < 10 * kMicrosInSecond) {
     return;
   }
   last_tune_time_ = now_tune_time;
+
   UpdateCurrentOptions();
+
   if (latency_spike == LatencySpike::kSmallSpike) {
-    std::cout << "ksmallspike : " << std::endl;
     TuneWhenSmallSpike(current_metric, change_points);
   } else if (latency_spike == LatencySpike::kBigSpike) {
     TuneWhenBigSpike(current_metric, change_points);
+  } else {
+    // 没有延迟尖峰，性能稳定时，回到默认值
+    ResetToDefault(change_points);
   }
 }
 
@@ -37,22 +42,29 @@ void TetrisTuner::UpdateCurrentOptions() {
 
 void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
                                      std::vector<ChangePoint>& change_points) {
-  if (cfd_->imm()->NumNotFlushed() >= current_opt_.max_write_buffer_number) {
+  // 内存压力大时限制MemTable数量, 减小memtable
+  if (cfd_->imm()->NumNotFlushed() >= current_opt_.max_write_buffer_number &&
+      cfd_->imm()->NumNotFlushed() < current_opt_.max_write_buffer_number * 2) {
+    // write为主
     if (current_metric.read_write_ratio_ < kReadWriteRatioThreshold) {
+      // 减少max_write_buffer_number
       uint64_t max_write_buffer_number = current_opt_.max_write_buffer_number;
-      uint64_t write_buffer_size = current_opt_.write_buffer_size;
       if (max_write_buffer_number > kMaxWriteBufferNumberLower) {
         max_write_buffer_number--;
         TuneMaxBufferNumber(std::to_string(max_write_buffer_number),
                             change_points);
       }
-      if (write_buffer_size > kWriteBufferSizeLower) {
+      // 增加write_buffer_size
+      uint64_t write_buffer_size = current_opt_.write_buffer_size;
+      if (write_buffer_size < kWriteBufferSizeUpper) {
         write_buffer_size =
-            std::max(write_buffer_size - kWriteBufferSizeMinusFactor,
-                     kWriteBufferSizeLower);
+            std::min(write_buffer_size + kWriteBufferSizePlusFactor,
+                     kWriteBufferSizeUpper);
         TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
       }
-      if (current_metric.seq_score_ >= 0.7) {
+
+      // 顺序写入场景判断
+      if (current_metric.seq_score_ >= kSeqThreshold) {
         // 顺序写入场景，不合并memtable
         // TuneMinWriteBufferNumberToMerge("1", change_points);
       } else {
@@ -66,15 +78,52 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
         // TuneCacheIndexAndFilterBlocks("false", change_points);
       }
     } else {
+      // read为主
+      // 减小write_buffer_size
+      uint64_t write_buffer_size = current_opt_.write_buffer_size;
+      if (write_buffer_size > kWriteBufferSizeLower) {
+        write_buffer_size =
+            std::max(write_buffer_size - kWriteBufferSizeMinusFactor,
+                     kWriteBufferSizeLower);
+        TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
+      }
+
       // 内存压力大且读为主，启用cache_index_and_filter_blocks
       if (current_opt_.table_factory) {
         // not support dynamic change
         // TuneCacheIndexAndFilterBlocks("true", change_points);
       }
     }
+  } else if (cfd_->imm()->NumNotFlushed() >=
+             current_opt_.max_write_buffer_number * 2) {
+    // 内存压力更大时调整flush线程数
+    // not support dynamic change
+    // if (current_opt_.max_background_flushes < 4) {
+    //   TuneMaxBackgroundFlushes(
+    //       std::to_string(current_opt_.max_background_flushes + 1),
+    //       change_points);
+    // }
+
+    // 增加level0_file_num_compaction_trigger
+    uint64_t file_num_trigger = current_opt_.level0_file_num_compaction_trigger;
+    if (file_num_trigger < kLevel0FileNumCompactionTriggerUpper) {
+      file_num_trigger++;
+      TuneLevel0FileNumCompactionTrigger(std::to_string(file_num_trigger),
+                                         change_points);
+    }
 
     // 内存压力大且L0层满
-    if (vfs_->NumLevelFiles(0) > current_opt_.level0_slowdown_writes_trigger) {
+    if (vfs_->NumLevelFiles(0) > current_opt_.level0_slowdown_writes_trigger &&
+        vfs_->NumLevelFiles(0) <= current_opt_.level0_stop_writes_trigger) {
+      // 增加max_background_jobs
+      if (current_opt_.max_background_jobs < kMaxBackgroundJobsUpper) {
+        TuneMaxBackgroundJobs(
+            std::to_string(current_opt_.max_background_jobs + 1),
+            change_points);
+      }
+    }
+    // 内存压力大且L0层阻塞
+    else if (vfs_->NumLevelFiles(0) > current_opt_.level0_stop_writes_trigger) {
       // 增加max_background_jobs
       if (current_opt_.max_background_jobs < kMaxBackgroundJobsUpper) {
         TuneMaxBackgroundJobs(
@@ -82,16 +131,19 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
             change_points);
       }
 
-      // 增加compaction_readahead_size
-      uint64_t readahead_size = current_opt_.compaction_readahead_size;
-      if (readahead_size < kCompactionReadaheadSizeUpper) {
-        readahead_size =
-            std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
-        TuneCompactionReadaheadSize(std::to_string(readahead_size),
-                                    change_points);
+      // 增加max_background_compactions
+      if (current_opt_.max_background_compactions <
+          kMaxBackgroundCompactionsUpper) {
+        TuneMaxBackGroundCompactions(
+            std::to_string(current_opt_.max_background_compactions + 1),
+            change_points);
       }
-    } else if (vfs_->NumLevelFiles(0) >
-               current_opt_.level0_stop_writes_trigger) {
+    }
+  } else {
+    // 低内存压力
+    // L0层满
+    if (vfs_->NumLevelFiles(0) > current_opt_.level0_slowdown_writes_trigger &&
+        vfs_->NumLevelFiles(0) <= current_opt_.level0_stop_writes_trigger) {
       // 增加max_background_jobs
       if (current_opt_.max_background_jobs < kMaxBackgroundJobsUpper) {
         TuneMaxBackgroundJobs(
@@ -116,10 +168,71 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
                                     change_points);
       }
     }
+    // L0层阻塞
+    else if (vfs_->NumLevelFiles(0) > current_opt_.level0_stop_writes_trigger) {
+      // 增加max_background_jobs
+      if (current_opt_.max_background_jobs < kMaxBackgroundJobsUpper) {
+        int new_jobs = std::min<int>(kMaxBackgroundJobsUpper,
+                                     current_opt_.max_background_jobs * 2);
+        TuneMaxBackgroundJobs(std::to_string(new_jobs), change_points);
+      }
 
-    // Bloom Filter调整 - 随机读取场景，加强Bloom Filter
-    if (current_metric.read_write_ratio_ > 0.5 &&
-        current_metric.seq_score_ < 0.4) {
+      // 增加max_background_compactions
+      if (current_opt_.max_background_compactions <
+          kMaxBackgroundCompactionsUpper) {
+        int new_compactions =
+            std::min<int>(kMaxBackgroundCompactionsUpper,
+                          current_opt_.max_background_compactions * 2);
+        TuneMaxBackGroundCompactions(std::to_string(new_compactions),
+                                     change_points);
+      }
+
+      // 增加compaction_readahead_size
+      uint64_t readahead_size = current_opt_.compaction_readahead_size;
+      if (readahead_size < kCompactionReadaheadSizeUpper) {
+        readahead_size =
+            std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
+        TuneCompactionReadaheadSize(std::to_string(readahead_size),
+                                    change_points);
+      }
+    }
+  }
+
+  // LSM调整，负载模式变化调整
+  if (current_metric.read_write_ratio_ <= kReadWriteRatioThreshold) {
+    // 顺序写入场景，放宽L0限制，延迟合并
+    if (current_metric.seq_score_ >= kSeqThreshold) {
+      TuneLevel0SlowDownWritesTrigger("30", change_points);
+      TuneLevel0StopWritesTrigger("50", change_points);
+      TuneLevel0FileNumCompactionTrigger("8", change_points);
+    }
+    // 随机写入场景，严格限制L0文件数，更激进合并
+    else if (current_metric.seq_score_ <= kRandomThreshold) {
+      TuneLevel0SlowDownWritesTrigger("16", change_points);
+      TuneLevel0StopWritesTrigger("24", change_points);
+      TuneLevel0FileNumCompactionTrigger("2", change_points);
+    }
+  } else if (current_metric.read_write_ratio_ > kReadWriteRatioThreshold) {
+    // 读为主场景
+    if (current_metric.seq_score_ <= kRandomThreshold) {
+      // 读随机场景
+      TuneLevel0SlowDownWritesTrigger("24", change_points);
+      TuneLevel0StopWritesTrigger("36", change_points);
+      TuneLevel0FileNumCompactionTrigger("4", change_points);
+
+      // 如果L0层满，增加预读大小
+      if (vfs_->NumLevelFiles(0) >
+          current_opt_.level0_slowdown_writes_trigger) {
+        uint64_t readahead_size = current_opt_.compaction_readahead_size;
+        if (readahead_size < kCompactionReadaheadSizeUpper) {
+          readahead_size =
+              std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
+          TuneCompactionReadaheadSize(std::to_string(readahead_size),
+                                      change_points);
+        }
+      }
+
+      // 随机读取场景，加强Bloom Filter
       // not support dynamic change
       // TuneBloomBitsPerKey("10", change_points);
 
@@ -138,29 +251,9 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
       //   }
       // }
     } else {
+      // 顺序读场景
       // not support dynamic change
       // TuneBloomBitsPerKey("5", change_points);
-    }
-  } else if (cfd_->imm()->NumNotFlushed() >=
-             current_opt_.max_write_buffer_number * 2) {
-    // 内存压力更大时调整flush线程数
-    // not support dynamic change
-    // if (current_opt_.max_background_flushes < 4) {
-    //   TuneMaxBackgroundFlushes(
-    //       std::to_string(current_opt_.max_background_flushes + 1),
-    //       change_points);
-    // }
-  }
-  if (current_metric.read_write_ratio_ <= kReadWriteRatioThreshold) {
-    if (current_metric.seq_score_ >= kSeqThreshold) {
-      TuneLevel0SlowDownWritesTrigger("30", change_points);
-      TuneLevel0StopWritesTrigger("50", change_points);
-      TuneLevel0FileNumCompactionTrigger("8", change_points);
-    } else if (current_metric.seq_score_ <= kRandomThreshold) {
-      // 随机写入场景，严格限制L0文件数
-      TuneLevel0SlowDownWritesTrigger("16", change_points);
-      TuneLevel0StopWritesTrigger("24", change_points);
-      TuneLevel0FileNumCompactionTrigger("2", change_points);
     }
   }
 }
@@ -177,40 +270,123 @@ void TetrisTuner::TuneWhenBigSpike(const TetrisMetrics& current_metric,
       TuneMaxBackgroundJobs(std::to_string(new_jobs), change_points);
     }
 
-    // 读多的场景增加预读
-    if (current_metric.read_write_ratio_ > 0.5) {
-      uint64_t readahead_size = current_opt_.compaction_readahead_size;
-      if (readahead_size < kCompactionReadaheadSizeUpper) {
-        readahead_size =
-            std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
-        TuneCompactionReadaheadSize(std::to_string(readahead_size),
-                                    change_points);
-      }
+    // 增加compaction_readahead_size
+    uint64_t readahead_size = current_opt_.compaction_readahead_size;
+    if (readahead_size < kCompactionReadaheadSizeUpper) {
+      readahead_size =
+          std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
+      TuneCompactionReadaheadSize(std::to_string(readahead_size),
+                                  change_points);
+    }
+
+    // 增加max_write_buffer_number
+    uint64_t max_write_buffer_number = current_opt_.max_write_buffer_number;
+    if (max_write_buffer_number < kMaxWriteBufferNumberUpper) {
+      max_write_buffer_number =
+          std::min(max_write_buffer_number * 2,
+                   static_cast<uint64_t>(kMaxWriteBufferNumberUpper));
+      TuneMaxBufferNumber(std::to_string(max_write_buffer_number),
+                          change_points);
     }
   }
 
-  // 如果是突发写入造成延迟峰值 根据write rate判断？
-  if (current_metric.p99_write_latency_ > 100) {
-    // 减小max_write_buffer_number
-    if (current_opt_.max_write_buffer_number > kMaxWriteBufferNumberLower) {
-      int new_buffer_num = std::max<int>(
-          kMaxWriteBufferNumberLower, current_opt_.max_write_buffer_number / 2);
-      TuneMaxBufferNumber(std::to_string(new_buffer_num), change_points);
-    }
+  // 如果是突发写入造成延迟峰值
+  // if (current_metric.p99_write_latency_ > 100) {
+  //   // 减小max_write_buffer_number
+  //   if (current_opt_.max_write_buffer_number > kMaxWriteBufferNumberLower) {
+  //     int new_buffer_num = std::max<int>(
+  //         kMaxWriteBufferNumberLower, current_opt_.max_write_buffer_number /
+  //         2);
+  //     TuneMaxBufferNumber(std::to_string(new_buffer_num), change_points);
+  //   }
 
-    // 减小write_buffer_size
-    uint64_t write_buffer_size = current_opt_.write_buffer_size;
-    if (write_buffer_size > kWriteBufferSizeLower) {
-      write_buffer_size =
-          std::max(write_buffer_size / 2, kWriteBufferSizeLower);
-      TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
-    }
+  //   // 减小write_buffer_size
+  //   uint64_t write_buffer_size = current_opt_.write_buffer_size;
+  //   if (write_buffer_size > kWriteBufferSizeLower) {
+  //     write_buffer_size =
+  //         std::max(write_buffer_size / 2, kWriteBufferSizeLower);
+  //     TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
+  //   }
 
-    // 增加flush线程数
-    // if (current_opt_.max_background_flushes < 4) {
-    //   int new_flushes = std::min(4, current_opt_.max_background_flushes * 2);
-    //   TuneMaxBackgroundFlushes(std::to_string(new_flushes), change_points);
-    // }
+  //   // 增加flush线程数
+  //   // if (current_opt_.max_background_flushes < 4) {
+  //   //   int new_flushes = std::min(4, current_opt_.max_background_flushes *
+  //   2);
+  //   //   TuneMaxBackgroundFlushes(std::to_string(new_flushes),
+  //   change_points);
+  //   // }
+
+  //   // 增加level0_file_num_compaction_trigger
+  //   uint64_t file_num_trigger =
+  //   current_opt_.level0_file_num_compaction_trigger; if (file_num_trigger <
+  //   kLevel0FileNumCompactionTriggerUpper) {
+  //     file_num_trigger =
+  //         std::min(file_num_trigger * 2,
+  //         kLevel0FileNumCompactionTriggerUpper);
+  //     TuneLevel0FileNumCompactionTrigger(std::to_string(file_num_trigger),
+  //                                        change_points);
+  //   }
+  // }
+}
+
+void TetrisTuner::ResetToDefault(std::vector<ChangePoint>& change_points) {
+  // 没有延迟尖峰，性能稳定时，回到默认值
+  if (current_opt_.write_buffer_size != kDefaultWriteBufferSize) {
+    TuneWriteBufferSize(std::to_string(kDefaultWriteBufferSize), change_points);
+  }
+
+  // max_background_flushes默认值
+  // not support dynamic change
+  // if (current_opt_.max_background_flushes != kDefaultMaxBackgroundFlushes) {
+  //   TuneMaxBackgroundFlushes(std::to_string(kDefaultMaxBackgroundFlushes),
+  //                          change_points);
+  // }
+
+  // max_background_jobs默认值
+  if (current_opt_.max_background_jobs != kDefaultMaxBackgroundJobs) {
+    TuneMaxBackgroundJobs(std::to_string(kDefaultMaxBackgroundJobs),
+                          change_points);
+  }
+
+  // max_background_compactions默认值
+  if (current_opt_.max_background_compactions !=
+      kDefaultMaxBackgroundCompactions) {
+    TuneMaxBackGroundCompactions(
+        std::to_string(kDefaultMaxBackgroundCompactions), change_points);
+  }
+
+  // compaction_readahead_size默认值
+  if (current_opt_.compaction_readahead_size !=
+      kDefaultCompactionReadaheadSize) {
+    TuneCompactionReadaheadSize(std::to_string(kDefaultCompactionReadaheadSize),
+                                change_points);
+  }
+
+  // level0_slowdown_writes_trigger默认值
+  if (current_opt_.level0_slowdown_writes_trigger !=
+      kDefaultLevel0SlowdownWritesTrigger) {
+    TuneLevel0SlowDownWritesTrigger(
+        std::to_string(kDefaultLevel0SlowdownWritesTrigger), change_points);
+  }
+
+  // level0_stop_writes_trigger默认值
+  if (current_opt_.level0_stop_writes_trigger !=
+      kDefaultLevel0StopWritesTrigger) {
+    TuneLevel0StopWritesTrigger(std::to_string(kDefaultLevel0StopWritesTrigger),
+                                change_points);
+  }
+
+  // level0_file_num_compaction_trigger默认值
+  if (current_opt_.level0_file_num_compaction_trigger !=
+      kDefaultLevel0FileNumCompactionTrigger) {
+    TuneLevel0FileNumCompactionTrigger(
+        std::to_string(kDefaultLevel0FileNumCompactionTrigger), change_points);
+  }
+
+  // max_write_buffer_number默认值
+  if (current_opt_.max_write_buffer_number != kDefaultMaxWriteBufferNumber) {
+    TuneMaxBufferNumber(std::to_string(kDefaultMaxWriteBufferNumber),
+                        change_points);
   }
 }
 
