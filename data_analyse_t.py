@@ -116,7 +116,7 @@ def plot_throughput_over_time(parsed_data):
 
     # 显示图表
     plt.tight_layout() # 调整布局以避免标签重叠
-    plt.savefig("test_data_dir/time-th.png")
+    plt.savefig("test_data_dir/time-th-tune.png")
     plt.show()
 
 if __name__ == "__main__":

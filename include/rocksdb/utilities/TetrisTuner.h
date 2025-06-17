@@ -8,11 +8,15 @@
 #include <vector>
 
 #include "db/db_impl/db_impl.h"
+#include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
 #include "zipfian_predictor.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+enum LatencySpike : uint8_t { kNoSpike = 0, kSmallSpike, kBigSpike };
+
 struct TetrisMetrics {
   double throughput_;        // MB/s
   double p99_read_latency_;  // ms
@@ -59,41 +63,68 @@ class TetrisTuner {
  public:
   TetrisTuner(DBImpl* db_ptr) : db_ptr_(db_ptr) {
     current_opt_ = db_ptr->GetOptions();
+    env_ = db_ptr->GetEnv();
+    last_tune_time_ = env_->NowMicros();
   }
   void AutoTuneByMetric(const TetrisMetrics& current_metric,
-                        std::vector<ChangePoint>& change_points);
+                        std::vector<ChangePoint>& change_points,
+                        LatencySpike& latency_spike);
 
  private:
   void UpdateCurrentOptions();
-  void TuneWriteBufferSize(const TetrisMetrics& current_metric,
+  void TuneWhenSmallSpike(const TetrisMetrics& current_metric,
+                          std::vector<ChangePoint>& change_points);
+  void TuneWhenBigSpike(const TetrisMetrics& current_metric,
+                        std::vector<ChangePoint>& change_points);
+  void TuneWriteBufferSize(const std::string& target_value,
                            std::vector<ChangePoint>& change_points);
-  void TuneMaxBufferNumber(const TetrisMetrics& current_metric,
+  void TuneMaxBufferNumber(const std::string& target_value,
                            std::vector<ChangePoint>& change_points);
   void TuneLevel0FileNumCompactionTrigger(
-      const TetrisMetrics& current_metric,
-      std::vector<ChangePoint>& change_points);
-  void TuneMaxBackgroundJobs(const TetrisMetrics& current_metric,
+      const std::string& target_value, std::vector<ChangePoint>& change_points);
+  void TuneMaxBackgroundJobs(const std::string& target_value,
                              std::vector<ChangePoint>& change_points);
-  void TuneCacheIndexAndFilterBlocks(const TetrisMetrics& current_metric,
+  void TuneCacheIndexAndFilterBlocks(const std::string& target_value,
                                      std::vector<ChangePoint>& change_points);
-  void TuneLevel0StopWritesTrigger(const TetrisMetrics& current_metric,
+  void TuneLevel0StopWritesTrigger(const std::string& target_value,
                                    std::vector<ChangePoint>& change_points);
-  void TuneLevel0SlowDownWritesTrigger(const TetrisMetrics& current_metric,
+  void TuneLevel0SlowDownWritesTrigger(const std::string& target_value,
                                        std::vector<ChangePoint>& change_points);
-  void TuneFileNumCompactionTrigger(const TetrisMetrics& current_metric,
+  void TuneFileNumCompactionTrigger(const std::string& target_value,
                                     std::vector<ChangePoint>& change_points);
-  void TuneBlockSize(const TetrisMetrics& current_metric,
+  void TuneBlockSize(const std::string& target_value,
                      std::vector<ChangePoint>& change_points);
-  void TuneMaxBytesForLevelBase(const TetrisMetrics& current_metric,
+  void TuneMaxBytesForLevelBase(const std::string& target_value,
                                 std::vector<ChangePoint>& change_points);
-  void TuneCompactionReadaheadSize(const TetrisMetrics& current_metric,
+  void TuneCompactionReadaheadSize(const std::string& target_value,
                                    std::vector<ChangePoint>& change_points);
-  void TuneMaxBackGroundCompactions(const TetrisMetrics& current_metric,
+  void TuneMaxBackGroundCompactions(const std::string& target_value,
                                     std::vector<ChangePoint>& change_points);
   DBImpl* db_ptr_;
   Options current_opt_;
-  static constexpr uint64_t max_memtable_size = 512ull << 20;
+  Env* env_;
+  Version* version_;
+  VersionStorageInfo* vfs_;
+  uint64_t last_tune_time_ = 0;
+  static constexpr double kSeqThreshold = 0.7;
+  static constexpr double kRandomThreshold = 0.4;
+  static constexpr uint64_t max_memtable_size = 1ull << 30;
   static constexpr uint64_t min_memtable_size = 64ull << 20;
+  static constexpr double kMemUsageThresholdLower = 60;
+  static constexpr double kMemUsageThresholdUpper = 80;
+  static constexpr double kReadWriteRatioThreshold = 0.2;
+  static constexpr int kMaxWriteBufferNumberUpper = 4;
+  static constexpr int kMaxWriteBufferNumberLower = 1;
+  static constexpr uint64_t kWriteBufferSizeUpper = 1024 * 1024 * 1024;
+  static constexpr uint64_t kWriteBufferSizeLower = 32 * 1024 * 1024;
+  static constexpr uint64_t kWriteBufferSizeMinusFactor = 64 * 1024 * 1024;
+  static constexpr int kMaxBackgroundJobsUpper = 16;
+  static constexpr int kMaxBackgroundJobsLower = 1;
+  static constexpr int kMaxBackgroundCompactionsUpper = 12;
+  static constexpr int kMaxBackgroundCompactionsLower = 1;
+  static constexpr uint64_t kCompactionReadaheadSizeUpper = 128 * 1024 * 1024;
+  static constexpr uint64_t kCompactionReadaheadSizeLower = 2 * 1024 * 1024;
+  static constexpr uint64_t kCompactionGranularityThreshold = 500;
 };
 }  // namespace ROCKSDB_NAMESPACE
 #endif  // TETRIS_TUNER_H

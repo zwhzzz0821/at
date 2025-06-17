@@ -101,8 +101,6 @@ static inline ZipfianPredictionResult PredictZipfian(
     const std::unordered_map<std::string, uint64_t>
         key_access_counts /*use copy to avoid data race*/) {
   if (key_access_counts.empty() || key_access_counts.size() == 1) {
-    std::cerr << "Error: Input keys or key_access_counts are invalid."
-              << std::endl;
     return {0.0, 0.0, 0.0, -1.0};
   }
   uint64_t total_accesses = std::accumulate(

@@ -61,8 +61,6 @@ enum OperationType : unsigned char {
   kOthers
 };
 
-enum LatencySpike : uint8_t { kNoSpike = 0, kSmallSpike, kBigSpike };
-
 constexpr std::string_view LatencySpikeToString(LatencySpike latency_spike) {
   switch (latency_spike) {
     case kNoSpike:
@@ -422,7 +420,7 @@ class ReporterTetris : public ReporterAgent {
     // detect lantency spike
     AutoTune();
     // when test, dont print
-    // std::cout << current_metrics_.ToString() << std::endl;
+    std::cout << current_metrics_.ToString() << std::endl;
     // std::cout << "write buffer size: " << current_opt.write_buffer_size
     //           << std::endl;
   }
@@ -479,11 +477,12 @@ class ReporterTetris : public ReporterAgent {
     int last_interval_write_count = write_count - write_count_;
     read_count_ = read_count;
     write_count_ = write_count;
-    if (last_interval_write_count == 0) {
+    if (last_interval_write_count + last_interval_read_count == 0) {
       return 0.0;  // avoid division by zero
     }
     return static_cast<double>(last_interval_read_count) /
-           last_interval_write_count;  // read/write ratio
+           (last_interval_write_count +
+            last_interval_read_count);  // read/write ratio
   }
   uint64_t GetFilterSize() {
     std::shared_ptr<const TableProperties> tp;

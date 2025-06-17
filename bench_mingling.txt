@@ -1,11 +1,10 @@
 ./db_bench \
   --benchmarks=fillrandom \
-  --num=300000000 \
+  --num=10000000 \
   --key_size=16 \
   --use_existing_db=0 \
   --value_size=100 \
   --statistics=true \
   --histogram=true \
   --compression_type=none \
-  --db=../tmp/db \
-  --duration=600 > ../test_data_dir/tune.log
+  --db=../tmp/db  > ../test_data_dir/tune.log

@@ -661,11 +661,11 @@ InternalStats::CacheEntryRoleStats::GetEntryCallback() {
 }
 
 double InternalStats::GetWriteAmplification() {
-    const VersionStorageInfo* vstorage = cfd_->current()->storage_info();
-    CompactionStats compaction_stats_sum;
-    std::map<int, std::map<LevelStatType, double>> levels_stats;
-    DumpCFMapStats(vstorage, &levels_stats, &compaction_stats_sum);
-    return levels_stats[-1][LevelStatType::WRITE_AMP];
+  const VersionStorageInfo* vstorage = cfd_->current()->storage_info();
+  CompactionStats compaction_stats_sum;
+  std::map<int, std::map<LevelStatType, double>> levels_stats;
+  DumpCFMapStats(vstorage, &levels_stats, &compaction_stats_sum);
+  return levels_stats[-1][LevelStatType::WRITE_AMP];
 }
 
 double InternalStats::GetIOIntensity() {
@@ -677,6 +677,15 @@ double InternalStats::GetIOIntensity() {
                          levels_stats[-1][LevelStatType::WRITE_MBPS];
   return io_intensity_;
 }
+
+// double InternalStats::GetCompactionTotalSize() {
+//   const VersionStorageInfo* vstorage = cfd_->current()->storage_info();
+//   CompactionStats compaction_stats_sum;
+//   std::map<int, std::map<LevelStatType, double>> levels_stats;
+//   DumpCFMapStats(vstorage, &levels_stats, &compaction_stats_sum);
+//   return levels_stats[-1][LevelStatType::READ_GB] +
+//          levels_stats[-1][LevelStatType::WRITE_GB];
+// }
 
 void InternalStats::CacheEntryRoleStats::BeginCollection(
     Cache* cache, SystemClock*, uint64_t start_time_micros) {

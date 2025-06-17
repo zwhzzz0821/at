@@ -2,13 +2,14 @@
 // Created by jinghuan on 5/24/21.
 //
 
+#include "rocksdb/utilities/report_agent.h"
+
 #include <cassert>
 #include <mutex>
 
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
-#include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/utilities/zipfian_predictor.h"
 #include "trace_replay/block_cache_tracer.h"
 
@@ -191,8 +192,11 @@ void ReporterTetris::AutoTune() {
               << LatencySpikeToString(latency_spike) << std::endl;
     std::vector<ChangePoint> change_points;
     // change memtable size according to the seq score
-    tuner_->AutoTuneByMetric(current_metrics_, change_points);
+    tuner_->AutoTuneByMetric(current_metrics_, change_points, latency_spike);
     // test not change option
+    for (const auto& point : change_points) {
+      std::cout << "change point: " << point.ToString() << std::endl;
+    }
     ApplyChangePointsInstantly(&change_points);
   }
 }
