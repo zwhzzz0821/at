@@ -131,11 +131,6 @@ class ReporterAgent {
   }
   void AccessOpLatency(uint64_t lantency,
                        OperationType op_type = OperationType::kOthers);
-  void ReportFinishedOps(int64_t num_ops, std::vector<Slice*> keys,
-                         std::vector<Slice*> values,
-                         OperationType op_type = OperationType::kOthers) {
-    assert(op_type == OperationType::kSeek);  // TODO
-  }
   virtual void InsertNewTuningPoints(ChangePoint point);
 
  public:
@@ -227,10 +222,6 @@ class ReporterAgentWithSILK : public ReporterAgent {
     assert(false);
     return current_metrics_;
   }
-  void UpdateMetric(int secs_elapsed) override {
-    assert(false);
-    // No metrics to update in this reporter
-  }
 };
 
 class ReporterAgentWithTuning : public ReporterAgent {
@@ -243,7 +234,6 @@ class ReporterAgentWithTuning : public ReporterAgent {
   uint64_t last_flush_thread_len;
   std::map<std::string, void*> string_to_attributes_map;
   std::unique_ptr<DOTA_Tuner> tuner;
-  bool applying_changes;
   static std::string DOTAHeader() {
     return "secs_elapsed,interval_qps,batch_size,thread_num";
   }
@@ -387,10 +377,6 @@ class ReporterWithMoreDetails : public ReporterAgent {
     assert(false);  // no use
     return current_metrics_;
   }
-
-  void UpdateMetric(int secs_elapsed) override {
-    assert(false);  // no use
-  }
 };
 
 class ReporterTetris : public ReporterAgent {
@@ -410,8 +396,7 @@ class ReporterTetris : public ReporterAgent {
   uint64_t read_count_ = 0;
   uint64_t write_count_ = 0;
   std::unique_ptr<TetrisTuner> tuner_;
-  bool applying_changes = false;
-  bool enable_tetris = false;
+  bool enable_tetris_ = false;
 
   void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
   void DetectAndTuning(int secs_elapsed) override {
@@ -419,7 +404,7 @@ class ReporterTetris : public ReporterAgent {
     // just update the system info
     UpdateMetric(secs_elapsed);
     // detect lantency spike
-    if (enable_tetris) {
+    if (enable_tetris_) {
       AutoTune();
     }
     // when test, dont print
@@ -430,6 +415,7 @@ class ReporterTetris : public ReporterAgent {
 
   void UpdateSystemInfo() {
     assert(db_ptr != nullptr);
+    std::cout << "no point" << std::endl;
     current_opt = db_ptr->GetOptions();
     version =
         db_ptr->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
@@ -533,7 +519,7 @@ class ReporterTetris : public ReporterAgent {
   ReporterTetris(DBImpl* running_db, Env* env, const std::string& fname,
                  uint64_t report_interval_secs, bool enable_tetris)
       : ReporterAgent(env, fname, report_interval_secs, Tetris_header()) {
-    this->enable_tetris = enable_tetris;
+    this->enable_tetris_ = enable_tetris;
     if (running_db == nullptr) {
       std::cout << "Missing parameter db_ to record more details" << std::endl;
       abort();
