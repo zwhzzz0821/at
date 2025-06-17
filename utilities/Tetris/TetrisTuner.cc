@@ -32,11 +32,12 @@ void TetrisTuner::UpdateCurrentOptions() {
   version_ =
       db_ptr_->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
   vfs_ = version_->storage_info();
+  cfd_ = version_->cfd();
 }
 
 void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
                                      std::vector<ChangePoint>& change_points) {
-  if (current_metric.mem_usage_ > kMemUsageThresholdLower) {
+  if (cfd_->imm()->NumNotFlushed() >= current_opt_.max_write_buffer_number) {
     if (current_metric.read_write_ratio_ < kReadWriteRatioThreshold) {
       uint64_t max_write_buffer_number = current_opt_.max_write_buffer_number;
       uint64_t write_buffer_size = current_opt_.write_buffer_size;
@@ -140,7 +141,8 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
       // not support dynamic change
       // TuneBloomBitsPerKey("5", change_points);
     }
-  } else if (current_metric.mem_usage_ > kMemUsageThresholdUpper) {
+  } else if (cfd_->imm()->NumNotFlushed() >=
+             current_opt_.max_write_buffer_number * 2) {
     // 内存压力更大时调整flush线程数
     // not support dynamic change
     // if (current_opt_.max_background_flushes < 4) {

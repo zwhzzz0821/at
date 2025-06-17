@@ -411,6 +411,7 @@ class ReporterTetris : public ReporterAgent {
   uint64_t write_count_ = 0;
   std::unique_ptr<TetrisTuner> tuner_;
   bool applying_changes = false;
+  bool enable_tetris = false;
 
   void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
   void DetectAndTuning(int secs_elapsed) override {
@@ -418,7 +419,9 @@ class ReporterTetris : public ReporterAgent {
     // just update the system info
     UpdateMetric(secs_elapsed);
     // detect lantency spike
-    AutoTune();
+    if (enable_tetris) {
+      AutoTune();
+    }
     // when test, dont print
     std::cout << current_metrics_.ToString() << std::endl;
     // std::cout << "write buffer size: " << current_opt.write_buffer_size
@@ -528,8 +531,9 @@ class ReporterTetris : public ReporterAgent {
 
  public:
   ReporterTetris(DBImpl* running_db, Env* env, const std::string& fname,
-                 uint64_t report_interval_secs)
+                 uint64_t report_interval_secs, bool enable_tetris)
       : ReporterAgent(env, fname, report_interval_secs, Tetris_header()) {
+    this->enable_tetris = enable_tetris;
     if (running_db == nullptr) {
       std::cout << "Missing parameter db_ to record more details" << std::endl;
       abort();

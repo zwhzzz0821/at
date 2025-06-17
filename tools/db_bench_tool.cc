@@ -786,6 +786,7 @@ DEFINE_int64(max_memtable_size, ROCKSDB_NAMESPACE::Options().max_memtable_size,
 DEFINE_bool(DOTA_enabled, false, "Whether trigger the DOTA framework");
 DEFINE_bool(FEA_enable, false, "Trigger FEAT tuner's FEA component");
 DEFINE_bool(TEA_enable, false, "Trigger FEAT tuner's TEA component");
+DEFINE_bool(Tetris_enable, false, "Trigger Tetris tuner");
 DEFINE_int32(SILK_bandwidth_limitation, 200, "MBPS of disk limitation");
 DEFINE_bool(SILK_triggered, false, "Whether the SILK tuner is triggered");
 DEFINE_double(idle_rate, 1.25,
@@ -3850,9 +3851,9 @@ class Benchmark {
     }
 
     std::unique_ptr<ReporterAgent> reporter_agent;
-    reporter_agent.reset(new ReporterTetris(reinterpret_cast<DBImpl*>(db_.db),
-                                            FLAGS_env, FLAGS_report_file,
-                                            FLAGS_report_interval_seconds));
+    reporter_agent.reset(new ReporterTetris(
+        reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+        FLAGS_report_interval_seconds, FLAGS_Tetris_enable));
     // if (FLAGS_report_interval_seconds > 0) {
     //   if ( FLAGS_DOTA_enabled || FLAGS_TEA_enable ||
     //       FLAGS_FEA_enable) {
@@ -3888,7 +3889,6 @@ class Benchmark {
     //                                            FLAGS_report_interval_seconds));
     //   }
     // }
-
     ThreadArg* arg = new ThreadArg[n];
     for (int i = 0; i < n; i++) {
 #ifdef NUMA

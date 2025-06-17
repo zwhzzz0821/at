@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "db/column_family.h"
 #include "db/db_impl/db_impl.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
@@ -105,6 +106,7 @@ class TetrisTuner {
   Env* env_;
   Version* version_;
   VersionStorageInfo* vfs_;
+  ColumnFamilyData* cfd_;
   uint64_t last_tune_time_ = 0;
   static constexpr double kSeqThreshold = 0.7;
   static constexpr double kRandomThreshold = 0.4;
