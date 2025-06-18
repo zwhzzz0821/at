@@ -523,7 +523,7 @@ void TetrisTuner::TuneCompactionReadaheadSize(
   }
   ChangePoint cp;
   cp.opt = "compaction_readahead_size";
-  cp.db_width = false;
+  cp.db_width = true;
   cp.value = target_value;
   change_points.emplace_back(std::move(cp));
 }
@@ -535,7 +535,7 @@ void TetrisTuner::TuneMaxBackGroundCompactions(
   }
   ChangePoint cp;
   cp.opt = "max_background_compactions";
-  cp.db_width = false;
+  cp.db_width = true;
   cp.value = target_value;
   change_points.emplace_back(std::move(cp));
 }
