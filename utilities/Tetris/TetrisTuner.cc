@@ -269,6 +269,7 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
 void TetrisTuner::TuneWhenBigSpike(const TetrisMetrics& current_metric,
                                    std::vector<ChangePoint>& change_points) {
   // 如果有太多compaction造成延迟峰值
+  (void)current_metric;
   if (vfs_->estimated_compaction_needed_bytes() >
       current_opt_.soft_pending_compaction_bytes_limit) {
     // 增加max_background_jobs

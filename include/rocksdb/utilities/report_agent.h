@@ -80,9 +80,9 @@ class ReporterAgent {
  private:
   std::string header_string_;
 
-  void UpdateSeqScore(Slice* key, Slice* value);
+  void UpdateSeqScore(Slice* key);
   void UpdateRwRatioScore(OperationType op_type, Slice* key, Slice* value);
-  void UpdateDistributionScore(Slice* key, Slice* value);
+  void UpdateDistributionScore(Slice* key);
 
  public:
   static std::string Header() { return "secs_elapsed,interval_qps"; }
@@ -122,9 +122,9 @@ class ReporterAgent {
     if (key != nullptr) {
       mutex_.lock();
       total_key_num_ += 1;
-      UpdateSeqScore(key, value);
+      UpdateSeqScore(key);
       UpdateRwRatioScore(op_type, key, value);
-      UpdateDistributionScore(key, value);
+      UpdateDistributionScore(key);
       mutex_.unlock();
       // update latency for per op
     }
@@ -139,7 +139,6 @@ class ReporterAgent {
  protected:
   virtual void DetectAndTuning(int secs_elapsed);
   virtual Status ReportLine(int secs_elapsed, int total_ops_done_snapshot);
-  virtual void UpdateMetric(int secs_elapsed);
   virtual const TetrisMetrics& GetMetrics() const;
   Env* env_;
   std::unique_ptr<WritableFile> report_file_;
@@ -391,6 +390,7 @@ class ReporterTetris : public ReporterAgent {
            ",IO bandwidth" + ",memtable size" + ",bloom filter size";
   }
   Options current_opt;
+
   Version* version;
   ColumnFamilyData* cfd;
   VersionStorageInfo* vfs;
@@ -419,6 +419,7 @@ class ReporterTetris : public ReporterAgent {
 
   void UpdateSystemInfo() {
     assert(db_ptr != nullptr);
+    std::cout << (db_ptr == nullptr) << std::endl;
     current_opt = db_ptr->GetOptions();
     version =
         db_ptr->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
@@ -465,6 +466,10 @@ class ReporterTetris : public ReporterAgent {
     if (write_hist != hist_->end()) {
       write_count = write_hist->second->num();
     }
+    std::cout << "read_count: " << read_count << " write_count: " << write_count
+              << std::endl;
+    std::cout << "read_count_: " << read_count_
+              << " write_count_: " << write_count_ << std::endl;
     int last_interval_read_count = read_count - read_count_;
     int last_interval_write_count = write_count - write_count_;
     read_count_ = read_count;
@@ -542,7 +547,7 @@ class ReporterTetris : public ReporterAgent {
 
   const TetrisMetrics& GetMetrics() const override { return current_metrics_; }
 
-  void UpdateMetric(int secs_elapsed) override {
+  void UpdateMetric(int secs_elapsed) {
     UpdateSystemInfo();
     TetrisMetrics metrics;
     metrics.update_time_ = env_->NowMicros() - time_started;

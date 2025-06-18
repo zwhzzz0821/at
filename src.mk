@@ -277,6 +277,7 @@ LIB_SOURCES =                                                   \
   utilities/leveldb_options/leveldb_options.cc                  \
   utilities/DOTA/report_agent.cc								\
   utilities/DOTA/DOTA_tuner.cc                      			\
+  utilities/Tetris/TetrisTuner.cc								\
   utilities/memory/memory_util.cc                               \
   utilities/merge_operators.cc                                  \
   utilities/merge_operators/max.cc                              \

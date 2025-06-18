@@ -64,7 +64,7 @@ void print_hex(const std::string& s) {
   printf("\n");
 }
 
-void ReporterAgent::UpdateSeqScore(Slice* key, Slice* value) {
+void ReporterAgent::UpdateSeqScore(Slice* key) {
   if (key == nullptr) {
     return;  // no key, do nothing
   }
@@ -126,7 +126,7 @@ void ReporterAgent::UpdateRwRatioScore(OperationType op_type, Slice* key,
   }
 }
 
-void ReporterAgent::UpdateDistributionScore(Slice* key, Slice* value) {
+void ReporterAgent::UpdateDistributionScore(Slice* key) {
   // TODO
   std::string string_key = key->ToString();
   if (key_distribution_map_.size() > 1000) {
@@ -150,9 +150,7 @@ void ReporterAgent::AccessOpLatency(uint64_t latency, OperationType op_type) {
 }
 
 LatencySpike ReporterTetris::DetectLatencySpike() {
-  mutex_.lock();
   if (op_latency_list_.size() < window_size_) {
-    mutex_.unlock();
     return kNoSpike;
   }
   auto avg_latency =
@@ -171,15 +169,12 @@ LatencySpike ReporterTetris::DetectLatencySpike() {
   if (op_latency_list_.back() > small_spike_threshold &&
       op_latency_list_.back() < kMicrosInSecond /*<= 1s*/) {
     op_latency_list_.back() = kSmallSpike;
-    mutex_.unlock();
     return kSmallSpike;
   } else if (op_latency_list_.back() >= big_spike_threshold &&
              op_latency_list_.back() >= kMicrosInSecond) {
     op_latency_list_.back() = kBigSpike;
-    mutex_.unlock();
     return kBigSpike;
   }
-  mutex_.unlock();
   return kNoSpike;
 }
 
@@ -244,10 +239,7 @@ void ReporterTetris::ApplyChangePointsInstantly(
 const TetrisMetrics& ReporterAgent::GetMetrics() const {
   return current_metrics_;
 }
-void ReporterAgent::UpdateMetric(int secs_elapsed) {
-  assert(false);
-  // No metrics to update in this reporter
-}
+
 void ReporterAgentWithTuning::DetectChangesPoints(int sec_elapsed) {
   std::vector<ChangePoint> change_points;
   if (applying_changes) {
@@ -444,8 +436,8 @@ ReporterAgentWithSILK::ReporterAgentWithSILK(DBImpl* running_db, Env* env,
 
 Status ReporterTetris::ReportLine(int secs_elapsed,
                                   int total_ops_done_snapshot) {
-  auto opt = this->db_ptr->GetOptions();
-
+  (void)secs_elapsed;
+  (void)total_ops_done_snapshot;
   // //TODO: append all metrics to the report file
   // std::string report = std::to_string(secs_elapsed) + "," +
   //                      std::to_string(total_ops_done_snapshot - last_report_)

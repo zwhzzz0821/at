@@ -275,8 +275,7 @@ class FEAT_Tuner : public DOTA_Tuner {
       : DOTA_Tuner(opt, running_db, last_report_op_ptr, total_ops_done_ptr, env,
                    gap_sec),
         TEA_enable(triggerTEA),
-        FEA_enable(triggerFEA),
-        current_stage(kSlowStart) {
+        FEA_enable(triggerFEA) {
     flush_list_from_opt_ptr =
         this->running_db_->immutable_db_options().flush_stats;
 
@@ -298,14 +297,6 @@ class FEAT_Tuner : public DOTA_Tuner {
   SystemScores current_score_;
   SystemScores head_score_;
   std::deque<TuningOP> recent_ops;
-  [[maybe_unused]] Stage current_stage;
-  [[maybe_unused]] double bandwidth_congestion_threshold = 0.7;
-  [[maybe_unused]] double slow_down_threshold = 0.75;
-  [[maybe_unused]] double RO_threshold = 0.8;
-  [[maybe_unused]] double LO_threshold = 0.7;
-  [[maybe_unused]] double MO_threshold = 0.5;
-  [[maybe_unused]] double batch_changing_frequency = 0.7;
-  [[maybe_unused]] int congestion_threads = min_thread;
   //  int double_ratio = 4;
   SystemScores normalize(SystemScores& origin_score);
 
