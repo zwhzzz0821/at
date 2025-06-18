@@ -39,26 +39,25 @@ struct TetrisMetrics {
   ZipfianPredictionResult zipfian_predictor_result;  // distribution score
   uint64_t update_time_ = 0;
   std::string ToString() {
-    return "TetrisMetrics: update_time=" + std::to_string(update_time_) + "\n" +
-           "throughput=" + std::to_string(throughput_) + "\n" +
-           "p99_read_latency=" + std::to_string(p99_read_latency_) + "\n" +
-           "p999_read_latency=" + std::to_string(p999_read_latency_) + "\n" +
-           "p99_write_latency=" + std::to_string(p99_write_latency_) + "\n" +
-           "p999_write_latency=" + std::to_string(p999_write_latency_) + "\n" +
-           "write_amplification=" + std::to_string(write_amplification_) +
-           "\n" + "read_write_ratio=" + std::to_string(read_write_ratio_) +
-           "\n" + "io_intensity=" + std::to_string(io_intensity_) + "\n" +
+    return "TetrisMetrics: update_time=" + std::to_string(update_time_) + "," +
+           "throughput=" + std::to_string(throughput_) + "," +
+           "p99_read_latency=" + std::to_string(p99_read_latency_) + "," +
+           "p999_read_latency=" + std::to_string(p999_read_latency_) + "," +
+           "p99_write_latency=" + std::to_string(p99_write_latency_) + "," +
+           "p999_write_latency=" + std::to_string(p999_write_latency_) + "," +
+           "write_amplification=" + std::to_string(write_amplification_) + "," +
+           "read_write_ratio=" + std::to_string(read_write_ratio_) + "," +
+           "io_intensity=" + std::to_string(io_intensity_) + "," +
            "compaction_granularity=" + std::to_string(compaction_granularity_) +
-           "\n" + "key_value_size_distribution=" +
-           std::to_string(key_value_size_distribution_) + "\n" +
-           "cpu_usage=" + std::to_string(cpu_usage_) + "\n" +
-           "mem_usage=" + std::to_string(mem_usage_) + "\n" +
-           "memtable_size=" + std::to_string(memtable_size_) + "\n" +
-           "bloom_filter_size=" + std::to_string(bloom_filter_size_) + "\n" +
-           "seq_score=" + std::to_string(seq_score_) + "\n" +
-           "rw_ratio_score=" + std::to_string(rw_ratio_score_) + "\n" +
-           "zipfian_predictor_result=" + zipfian_predictor_result.ToString() +
-           "\n";
+           "," + "key_value_size_distribution=" +
+           std::to_string(key_value_size_distribution_) + "," +
+           "cpu_usage=" + std::to_string(cpu_usage_) + "," +
+           "mem_usage=" + std::to_string(mem_usage_) + "," +
+           "memtable_size=" + std::to_string(memtable_size_) + "," +
+           "bloom_filter_size=" + std::to_string(bloom_filter_size_) + "," +
+           "seq_score=" + std::to_string(seq_score_) + "," +
+           "rw_ratio_score=" + std::to_string(rw_ratio_score_) + "," +
+           "zipfian_predictor_result=" + zipfian_predictor_result.ToString();
   }
 };
 class TetrisTuner {

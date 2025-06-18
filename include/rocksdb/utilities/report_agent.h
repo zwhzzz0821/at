@@ -398,6 +398,7 @@ class ReporterTetris : public ReporterAgent {
   uint64_t write_count_ = 0;
   std::unique_ptr<TetrisTuner> tuner_;
   std::unique_ptr<WritableFile> tune_log_file_;  // 调优日志文件
+  std::unique_ptr<WritableFile> metrics_file_;
   bool enable_tetris_ = false;
   bool applying_changes = false;
   LatencySpike last_latency_spike_ = kNoSpike;
@@ -412,9 +413,10 @@ class ReporterTetris : public ReporterAgent {
       AutoTune();
     }
     // when test, dont print
-    std::cout << current_metrics_.ToString() << std::endl;
-    // std::cout << "write buffer size: " << current_opt.write_buffer_size
-    //           << std::endl;
+    if (metrics_file_ != nullptr) {
+      metrics_file_->Append(current_metrics_.ToString() + "\n");
+      metrics_file_->Flush();
+    }
   }
 
   void UpdateSystemInfo() {
@@ -548,6 +550,10 @@ class ReporterTetris : public ReporterAgent {
                                        EnvOptions());
       if (!s.ok()) {
         std::cout << "打开tune_option.log失败: " << s.ToString() << std::endl;
+      }
+      s = env_->NewWritableFile("metrics.log", &metrics_file_, EnvOptions());
+      if (!s.ok()) {
+        std::cout << "打开metrics.log失败: " << s.ToString() << std::endl;
       }
       tuner_ = std::make_unique<TetrisTuner>(running_db, env);
     }
