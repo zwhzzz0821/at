@@ -397,6 +397,7 @@ class ReporterTetris : public ReporterAgent {
   uint64_t read_count_ = 0;
   uint64_t write_count_ = 0;
   std::unique_ptr<TetrisTuner> tuner_;
+  std::unique_ptr<WritableFile> tune_log_file_;  // 调优日志文件
   bool enable_tetris_ = false;
   bool applying_changes = false;
   LatencySpike last_latency_spike_ = kNoSpike;
@@ -528,6 +529,11 @@ class ReporterTetris : public ReporterAgent {
 
     } else {
       db_ptr = reinterpret_cast<DBImpl*>(running_db);
+      Status s = env_->NewWritableFile("tune_option.log", &tune_log_file_,
+                                       EnvOptions());
+      if (!s.ok()) {
+        std::cout << "打开tune_option.log失败: " << s.ToString() << std::endl;
+      }
       tuner_ = std::make_unique<TetrisTuner>(running_db, env);
     }
   }

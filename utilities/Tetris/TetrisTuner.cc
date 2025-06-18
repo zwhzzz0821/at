@@ -256,6 +256,14 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
       // TuneBloomBitsPerKey("5", change_points);
     }
   }
+  if (current_metric.read_write_ratio_ < 0.2) {
+    TuneMaxBytesForLevelBase("67108864", change_points);
+  } else if (current_metric.read_write_ratio_ > 0.2 &&
+             current_metric.read_write_ratio_ < 0.8) {
+    TuneMaxBytesForLevelBase("1073741824", change_points);
+  } else if (current_metric.read_write_ratio_ > 0.8) {
+    TuneMaxBytesForLevelBase("17179869184", change_points);
+  }
 }
 
 void TetrisTuner::TuneWhenBigSpike(const TetrisMetrics& current_metric,

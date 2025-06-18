@@ -198,7 +198,12 @@ void ReporterTetris::AutoTune() {
   }
   // test not change option
   for (const auto& point : change_points) {
-    std::cout << "change point: " << point.ToString() << std::endl;
+    // 将输出改为写入文件
+    std::string log_line = "change point: " + point.ToString() + "\n";
+    if (tune_log_file_ != nullptr) {
+      tune_log_file_->Append(log_line);
+      tune_log_file_->Flush();
+    }
   }
   ApplyChangePointsInstantly(&change_points);
 }
