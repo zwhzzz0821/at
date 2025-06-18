@@ -15,9 +15,6 @@ void TetrisTuner::AutoTuneByMetric(TetrisMetrics current_metric,
   std::lock_guard<std::mutex> lock(mutex_);
 
   uint64_t now_tune_time = env_->NowMicros();
-  if (now_tune_time - last_tune_time_ < 10 * kMicrosInSecond) {
-    return;
-  }
   last_tune_time_ = now_tune_time;
 
   UpdateCurrentOptions();
