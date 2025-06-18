@@ -69,7 +69,7 @@ class TetrisTuner {
   }
   TetrisTuner() = delete;
   ~TetrisTuner() = default;
-  void AutoTuneByMetric(const TetrisMetrics& current_metric,
+  void AutoTuneByMetric(TetrisMetrics current_metric,
                         std::vector<ChangePoint>& change_points,
                         LatencySpike& latency_spike);
 

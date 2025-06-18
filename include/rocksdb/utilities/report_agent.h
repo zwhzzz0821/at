@@ -429,6 +429,10 @@ class ReporterTetris : public ReporterAgent {
 
   double GetReadLantency(double percentile = 50) {
     OperationType op_type = kRead;
+    if (hist_ == nullptr) {
+      std::cout << "No histogram for read operation" << std::endl;
+      return 0.0;
+    }
     auto hist = hist_->find(op_type);
     if (hist == hist_->end()) {
       return 0.0;
@@ -441,6 +445,9 @@ class ReporterTetris : public ReporterAgent {
   }
   double GetWriteLantency(double percentile = 50) {
     OperationType op_type = kWrite;
+    if (hist_ == nullptr) {
+      return 0.0;
+    }
     auto hist = hist_->find(op_type);
     if (hist == hist_->end()) {
       std::cout << "No histogram for write operation" << std::endl;
@@ -456,6 +463,9 @@ class ReporterTetris : public ReporterAgent {
   double GetReadWriteRatio() {
     OperationType read_op = kRead;
     OperationType write_op = kWrite;
+    if (hist_ == nullptr) {
+      return 0.0;
+    }
     auto read_hist = hist_->find(read_op);
     auto write_hist = hist_->find(write_op);
     int read_count = 0;

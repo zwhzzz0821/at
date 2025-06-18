@@ -9,7 +9,7 @@
 #include "rocksdb/utilities/DOTA_tuner.h"
 #include "trace_replay/block_cache_tracer.h"
 namespace ROCKSDB_NAMESPACE {
-void TetrisTuner::AutoTuneByMetric(const TetrisMetrics& current_metric,
+void TetrisTuner::AutoTuneByMetric(TetrisMetrics current_metric,
                                    std::vector<ChangePoint>& change_points,
                                    LatencySpike& latency_spike) {
   std::lock_guard<std::mutex> lock(mutex_);
