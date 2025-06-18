@@ -162,17 +162,16 @@ LatencySpike ReporterTetris::DetectLatencySpike() {
                         return sum + (x - avg_latency) * (x - avg_latency);
                       }) /
       op_latency_list_.size());
-  const auto small_spike_threshold =
-      avg_latency + k_small_multiplier_ * std_latency;
-  const auto big_spike_threshold =
-      avg_latency + k_big_multiplier_ * std_latency;
-  if (op_latency_list_.back() > small_spike_threshold &&
-      op_latency_list_.back() < kMicrosInSecond /*<= 1s*/) {
-    op_latency_list_.back() = kSmallSpike;
+  double z_score =
+      (std_latency != 0 ? (op_latency_list_.back() - avg_latency) / std_latency
+                        : 0);
+  if (abs(z_score) > kSmallSpikeThreshold ||
+      op_latency_list_.back() > 1e6) {  // 1s
+    std::cout << "detect small spike" << std::endl;
     return kSmallSpike;
-  } else if (op_latency_list_.back() >= big_spike_threshold &&
-             op_latency_list_.back() >= kMicrosInSecond) {
-    op_latency_list_.back() = kBigSpike;
+  } else if (abs(z_score) > kBigSpikeThreshold ||
+             op_latency_list_.back() > 1e7) {  // 10s
+    std::cout << "detect big spike" << std::endl;
     return kBigSpike;
   }
   return kNoSpike;

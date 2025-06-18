@@ -159,8 +159,8 @@ class ReporterAgent {
   uint64_t write_opt_size_sum_ = 0;
   std::vector<uint64_t> op_latency_list_;  // sliding window of window_size_ ops
   static constexpr uint64_t window_size_ = 1000;
-  static constexpr double k_small_multiplier_ = 2;
-  static constexpr double k_big_multiplier_ = 10;
+  static constexpr double kSmallSpikeThreshold = 2;
+  static constexpr double kBigSpikeThreshold = 4;
   std::condition_variable stop_cv_;
   HistogramMapPtr hist_;
   bool stop_;
@@ -421,7 +421,6 @@ class ReporterTetris : public ReporterAgent {
 
   void UpdateSystemInfo() {
     assert(db_ptr != nullptr);
-    std::cout << (db_ptr == nullptr) << std::endl;
     current_opt = db_ptr->GetOptions();
     version =
         db_ptr->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
@@ -478,10 +477,6 @@ class ReporterTetris : public ReporterAgent {
     if (write_hist != hist_->end()) {
       write_count = write_hist->second->num();
     }
-    std::cout << "read_count: " << read_count << " write_count: " << write_count
-              << std::endl;
-    std::cout << "read_count_: " << read_count_
-              << " write_count_: " << write_count_ << std::endl;
     int last_interval_read_count = read_count - read_count_;
     int last_interval_write_count = write_count - write_count_;
     read_count_ = read_count;
