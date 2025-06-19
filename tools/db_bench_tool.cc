@@ -3851,44 +3851,45 @@ class Benchmark {
     }
 
     std::unique_ptr<ReporterAgent> reporter_agent;
-    reporter_agent.reset(new ReporterTetris(
-        reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-        FLAGS_report_interval_seconds, FLAGS_Tetris_enable));
-    // if (FLAGS_report_interval_seconds > 0) {
-    //   if ( FLAGS_DOTA_enabled || FLAGS_TEA_enable ||
-    //       FLAGS_FEA_enable) {
-    //     // need to use another Report Agent
-    //     if (FLAGS_DOTA_tuning_gap == 0) {
-    //       reporter_agent.reset(new ReporterAgentWithTuning(
-    //           reinterpret_cast<DBImpl*>(db_.db), FLAGS_env,
-    //           FLAGS_report_file, FLAGS_report_interval_seconds,
-    //           FLAGS_report_interval_seconds));
-    //     } else {
-    //       reporter_agent.reset(new ReporterAgentWithTuning(
-    //           reinterpret_cast<DBImpl*>(db_.db), FLAGS_env,
-    //           FLAGS_report_file, FLAGS_report_interval_seconds,
-    //           FLAGS_DOTA_tuning_gap));
-    //     }
-    //     auto tuner_agent =
-    //         reinterpret_cast<ReporterAgentWithTuning*>(reporter_agent.get());
-    //     tuner_agent->UseFEATTuner(FLAGS_TEA_enable, FLAGS_FEA_enable);
-    //     tuner_agent->GetTuner()->set_idle_ratio(FLAGS_idle_rate);
-    //     tuner_agent->GetTuner()->set_gap_threshold(FLAGS_FEA_gap_threshold);
-    //     tuner_agent->GetTuner()->set_slow_flush_threshold(FLAGS_TEA_slow_flush);
-    //   } else if (FLAGS_detailed_running_stats) {
-    //     reporter_agent.reset(new ReporterWithMoreDetails(
-    //         reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-    //         FLAGS_report_interval_seconds));
-    //   } else if (FLAGS_SILK_triggered) {
-    //     reporter_agent.reset(new ReporterAgentWithSILK(
-    //         reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
-    //         FLAGS_report_interval_seconds, FLAGS_value_size,
-    //         FLAGS_SILK_bandwidth_limitation));
-    //   } else {
-    //     reporter_agent.reset(new ReporterAgent(FLAGS_env, FLAGS_report_file,
-    //                                            FLAGS_report_interval_seconds));
-    //   }
-    // }
+    if (FLAGS_Tetris_enable) {
+      reporter_agent.reset(new ReporterTetris(
+          reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+          FLAGS_report_interval_seconds, FLAGS_Tetris_enable));
+    } else {
+      if (FLAGS_report_interval_seconds > 0) {
+        if (FLAGS_DOTA_enabled || FLAGS_TEA_enable || FLAGS_FEA_enable) {
+          // need to use another Report Agent
+          if (FLAGS_DOTA_tuning_gap == 0) {
+            reporter_agent.reset(new ReporterAgentWithTuning(
+                reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+                FLAGS_report_interval_seconds, FLAGS_report_interval_seconds));
+          } else {
+            reporter_agent.reset(new ReporterAgentWithTuning(
+                reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+                FLAGS_report_interval_seconds, FLAGS_DOTA_tuning_gap));
+          }
+          auto tuner_agent =
+              reinterpret_cast<ReporterAgentWithTuning*>(reporter_agent.get());
+          tuner_agent->UseFEATTuner(FLAGS_TEA_enable, FLAGS_FEA_enable);
+          tuner_agent->GetTuner()->set_idle_ratio(FLAGS_idle_rate);
+          tuner_agent->GetTuner()->set_gap_threshold(FLAGS_FEA_gap_threshold);
+          tuner_agent->GetTuner()->set_slow_flush_threshold(
+              FLAGS_TEA_slow_flush);
+        } else if (FLAGS_detailed_running_stats) {
+          reporter_agent.reset(new ReporterWithMoreDetails(
+              reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+              FLAGS_report_interval_seconds));
+        } else if (FLAGS_SILK_triggered) {
+          reporter_agent.reset(new ReporterAgentWithSILK(
+              reinterpret_cast<DBImpl*>(db_.db), FLAGS_env, FLAGS_report_file,
+              FLAGS_report_interval_seconds, FLAGS_value_size,
+              FLAGS_SILK_bandwidth_limitation));
+        } else {
+          reporter_agent.reset(new ReporterAgent(
+              FLAGS_env, FLAGS_report_file, FLAGS_report_interval_seconds));
+        }
+      }
+    }
     ThreadArg* arg = new ThreadArg[n];
     for (int i = 0; i < n; i++) {
 #ifdef NUMA

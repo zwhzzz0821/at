@@ -39,175 +39,51 @@ void TetrisTuner::UpdateCurrentOptions() {
 
 void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
                                      std::vector<ChangePoint>& change_points) {
-  // 内存压力大时限制MemTable数量, 减小memtable
-  if (cfd_->imm()->NumNotFlushed() >= current_opt_.max_write_buffer_number &&
-      cfd_->imm()->NumNotFlushed() < current_opt_.max_write_buffer_number * 2) {
-    // write为主
-    if (current_metric.read_write_ratio_ < kReadWriteRatioThreshold) {
-      // 减少max_write_buffer_number
-      uint64_t max_write_buffer_number = current_opt_.max_write_buffer_number;
-      if (max_write_buffer_number > kMaxWriteBufferNumberLower) {
-        max_write_buffer_number--;
-        TuneMaxBufferNumber(std::to_string(max_write_buffer_number),
-                            change_points);
-      }
-      // 增加write_buffer_size
-      uint64_t write_buffer_size = current_opt_.write_buffer_size;
-      if (write_buffer_size < kWriteBufferSizeUpper) {
-        write_buffer_size =
-            std::min(write_buffer_size + kWriteBufferSizePlusFactor,
-                     kWriteBufferSizeUpper);
-        TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
-      }
+  // 判断workload pattern是否发生变化，特定模式特定调参
+  // read-dominate
+  // if (current_metric.read_write_ratio_ > kReadWriteRatioThreshold) {
 
-      // 顺序写入场景判断
-      if (current_metric.seq_score_ >= kSeqThreshold) {
-        // 顺序写入场景，不合并memtable
-        // TuneMinWriteBufferNumberToMerge("1", change_points);
-      } else {
-        // 随机写入场景，合并memtable
-        // TuneMinWriteBufferNumberToMerge("2", change_points);
-      }
-
-      // 内存压力大且写为主，禁用cache_index_and_filter_blocks
-      if (current_opt_.table_factory) {
-        // not support dynamic change
-        // TuneCacheIndexAndFilterBlocks("false", change_points);
-      }
-    } else {
-      // read为主
-      // 减小write_buffer_size
-      uint64_t write_buffer_size = current_opt_.write_buffer_size;
-      if (write_buffer_size > kWriteBufferSizeLower) {
-        write_buffer_size =
-            std::max(write_buffer_size - kWriteBufferSizeMinusFactor,
-                     kWriteBufferSizeLower);
-        TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
-      }
-
-      // 内存压力大且读为主，启用cache_index_and_filter_blocks
-      if (current_opt_.table_factory) {
-        // not support dynamic change
-        // TuneCacheIndexAndFilterBlocks("true", change_points);
-      }
-    }
-  } else if (cfd_->imm()->NumNotFlushed() >=
-             current_opt_.max_write_buffer_number * 2) {
-    // 内存压力更大时调整flush线程数
-    // not support dynamic change
-    // if (current_opt_.max_background_flushes < 4) {
-    //   TuneMaxBackgroundFlushes(
-    //       std::to_string(current_opt_.max_background_flushes + 1),
-    //       change_points);
-    // }
-
-    // 增加level0_file_num_compaction_trigger
-    uint64_t file_num_trigger = current_opt_.level0_file_num_compaction_trigger;
-    if (file_num_trigger < kLevel0FileNumCompactionTriggerUpper) {
-      file_num_trigger++;
-      TuneLevel0FileNumCompactionTrigger(std::to_string(file_num_trigger),
-                                         change_points);
-    }
-
-    // 内存压力大且L0层满
-    if (vfs_->NumLevelFiles(0) > current_opt_.level0_slowdown_writes_trigger &&
-        vfs_->NumLevelFiles(0) <= current_opt_.level0_stop_writes_trigger) {
-      // 增加max_background_jobs
-      if (current_opt_.max_background_jobs < kMaxBackgroundJobsUpper) {
-        TuneMaxBackgroundJobs(
-            std::to_string(current_opt_.max_background_jobs + 1),
-            change_points);
-      }
-    }
-    // 内存压力大且L0层阻塞
-    else if (vfs_->NumLevelFiles(0) > current_opt_.level0_stop_writes_trigger) {
-      // 增加max_background_jobs
-      if (current_opt_.max_background_jobs < kMaxBackgroundJobsUpper) {
-        TuneMaxBackgroundJobs(
-            std::to_string(current_opt_.max_background_jobs + 1),
-            change_points);
-      }
-
-      // 增加max_background_compactions
-      if (current_opt_.max_background_compactions <
-          kMaxBackgroundCompactionsUpper) {
-        TuneMaxBackGroundCompactions(
-            std::to_string(current_opt_.max_background_compactions + 1),
-            change_points);
-      }
+  // }else{
+  // write-dominate
+  // 顺序写入场景判断
+  if (current_metric.seq_score_ >= kSeqThreshold) {
+    // 顺序写入场景，不合并memtable
+    // TuneMinWriteBufferNumberToMerge("1", change_points);
+    // 增加write_buffer_size
+    uint64_t write_buffer_size = current_opt_.write_buffer_size;
+    if ((write_buffer_size + kWriteBufferSizePlusFactor) <=
+        kWriteBufferSizeUpper) {
+      write_buffer_size =
+          std::min(write_buffer_size + kWriteBufferSizePlusFactor,
+                   kWriteBufferSizeUpper);
+      TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
     }
   } else {
-    // 低内存压力
-    // L0层满
-    if (vfs_->NumLevelFiles(0) > current_opt_.level0_slowdown_writes_trigger &&
-        vfs_->NumLevelFiles(0) <= current_opt_.level0_stop_writes_trigger) {
-      // 增加max_background_jobs
-      if (current_opt_.max_background_jobs < kMaxBackgroundJobsUpper) {
-        TuneMaxBackgroundJobs(
-            std::to_string(current_opt_.max_background_jobs + 1),
-            change_points);
-      }
-
-      // 增加max_background_compactions
-      if (current_opt_.max_background_compactions <
-          kMaxBackgroundCompactionsUpper) {
-        TuneMaxBackGroundCompactions(
-            std::to_string(current_opt_.max_background_compactions + 1),
-            change_points);
-      }
-
-      // 增加compaction_readahead_size
-      uint64_t readahead_size = current_opt_.compaction_readahead_size;
-      if (readahead_size < kCompactionReadaheadSizeUpper) {
-        readahead_size =
-            std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
-        TuneCompactionReadaheadSize(std::to_string(readahead_size),
-                                    change_points);
-      }
-    }
-    // L0层阻塞
-    else if (vfs_->NumLevelFiles(0) > current_opt_.level0_stop_writes_trigger) {
-      // 增加max_background_jobs
-      if (current_opt_.max_background_jobs < kMaxBackgroundJobsUpper) {
-        int new_jobs = std::min<int>(kMaxBackgroundJobsUpper,
-                                     current_opt_.max_background_jobs * 2);
-        TuneMaxBackgroundJobs(std::to_string(new_jobs), change_points);
-      }
-
-      // 增加max_background_compactions
-      if (current_opt_.max_background_compactions <
-          kMaxBackgroundCompactionsUpper) {
-        int new_compactions =
-            std::min<int>(kMaxBackgroundCompactionsUpper,
-                          current_opt_.max_background_compactions * 2);
-        TuneMaxBackGroundCompactions(std::to_string(new_compactions),
-                                     change_points);
-      }
-
-      // 增加compaction_readahead_size
-      uint64_t readahead_size = current_opt_.compaction_readahead_size;
-      if (readahead_size < kCompactionReadaheadSizeUpper) {
-        readahead_size =
-            std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
-        TuneCompactionReadaheadSize(std::to_string(readahead_size),
-                                    change_points);
-      }
+    // 随机写入场景，合并memtable
+    // TuneMinWriteBufferNumberToMerge("2", change_points);
+    // 增加write_buffer_size
+    uint64_t write_buffer_size = current_opt_.write_buffer_size;
+    if ((write_buffer_size - kWriteBufferSizeMinusFactor) >=
+        kWriteBufferSizeLower) {
+      write_buffer_size =
+          std::min(write_buffer_size - kWriteBufferSizeMinusFactor,
+                   kWriteBufferSizeUpper);
+      TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
     }
   }
-
+  // }
+  /////////////////////////////////////////////////////////////////////////
   // LSM调整，负载模式变化调整
   if (current_metric.read_write_ratio_ <= kReadWriteRatioThreshold) {
     // 顺序写入场景，放宽L0限制，延迟合并
     if (current_metric.seq_score_ >= kSeqThreshold) {
       TuneLevel0SlowDownWritesTrigger("30", change_points);
       TuneLevel0StopWritesTrigger("50", change_points);
-      TuneLevel0FileNumCompactionTrigger("8", change_points);
     }
     // 随机写入场景，严格限制L0文件数，更激进合并
     else if (current_metric.seq_score_ <= kRandomThreshold) {
       TuneLevel0SlowDownWritesTrigger("16", change_points);
       TuneLevel0StopWritesTrigger("24", change_points);
-      TuneLevel0FileNumCompactionTrigger("2", change_points);
     }
   } else if (current_metric.read_write_ratio_ > kReadWriteRatioThreshold) {
     // 读为主场景
@@ -215,20 +91,6 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
       // 读随机场景
       TuneLevel0SlowDownWritesTrigger("24", change_points);
       TuneLevel0StopWritesTrigger("36", change_points);
-      TuneLevel0FileNumCompactionTrigger("4", change_points);
-
-      // 如果L0层满，增加预读大小
-      if (vfs_->NumLevelFiles(0) >
-          current_opt_.level0_slowdown_writes_trigger) {
-        uint64_t readahead_size = current_opt_.compaction_readahead_size;
-        if (readahead_size < kCompactionReadaheadSizeUpper) {
-          readahead_size =
-              std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
-          TuneCompactionReadaheadSize(std::to_string(readahead_size),
-                                      change_points);
-        }
-      }
-
       // 随机读取场景，加强Bloom Filter
       // not support dynamic change
       // TuneBloomBitsPerKey("10", change_points);
@@ -253,12 +115,126 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
       // TuneBloomBitsPerKey("5", change_points);
     }
   }
+  /////////////////////////////////////////////////////////////////////////
+  // 内存压力大时限制MemTable数量, 减小memtable
+  if (cfd_->imm()->NumNotFlushed() >=
+      current_opt_.max_write_buffer_number * 2) {
+    // increase max_write_buffer_number
+    uint64_t max_write_buffer_number = current_opt_.max_write_buffer_number;
+    if ((max_write_buffer_number + 1) <= kMaxWriteBufferNumberUpper) {
+      max_write_buffer_number++;
+      TuneMaxBufferNumber(std::to_string(max_write_buffer_number),
+                          change_points);
+    }
+
+    // write为主
+    if (current_metric.read_write_ratio_ < kReadWriteRatioThreshold) {
+      // 内存压力大且写为主，禁用cache_index_and_filter_blocks
+      if (current_opt_.table_factory) {
+        // not support dynamic change
+        // TuneCacheIndexAndFilterBlocks("false", change_points);
+      }
+    } else {
+      // 内存压力大且读为主，启用cache_index_and_filter_blocks
+      if (current_opt_.table_factory) {
+        // not support dynamic change
+        // TuneCacheIndexAndFilterBlocks("true", change_points);
+      }
+    }
+
+    // 内存压力更大时调整flush线程数
+    // not support dynamic change
+    // if (current_opt_.max_background_flushes < 4) {
+    //   TuneMaxBackgroundFlushes(
+    //       std::to_string(current_opt_.max_background_flushes + 1),
+    //       change_points);
+    // }
+
+    // L0层满
+    if (vfs_->NumLevelFiles(0) >= current_opt_.level0_slowdown_writes_trigger &&
+        vfs_->NumLevelFiles(0) < current_opt_.level0_stop_writes_trigger) {
+      // 增加max_background_jobs
+      if ((current_opt_.max_background_jobs + 1) <= kMaxBackgroundJobsUpper) {
+        TuneMaxBackgroundJobs(
+            std::to_string(current_opt_.max_background_jobs + 1),
+            change_points);
+      }
+    }
+    // L0层阻塞
+    else if (vfs_->NumLevelFiles(0) >=
+             current_opt_.level0_stop_writes_trigger) {
+      // 增加max_background_jobs
+      if ((current_opt_.max_background_jobs * 2) <= kMaxBackgroundJobsUpper) {
+        TuneMaxBackgroundJobs(
+            std::to_string(current_opt_.max_background_jobs * 2),
+            change_points);
+      }
+    }
+  } else {
+    // 低内存压力
+    // L0层满
+    if (vfs_->NumLevelFiles(0) > current_opt_.level0_slowdown_writes_trigger &&
+        vfs_->NumLevelFiles(0) <= current_opt_.level0_stop_writes_trigger) {
+      // 增加max_background_compactions
+      if (current_opt_.max_background_compactions <
+          kMaxBackgroundCompactionsUpper) {
+        TuneMaxBackGroundCompactions(
+            std::to_string(current_opt_.max_background_compactions + 1),
+            change_points);
+      }
+      // 增加compaction_readahead_size
+      uint64_t readahead_size = current_opt_.compaction_readahead_size;
+      if (readahead_size < kCompactionReadaheadSizeUpper) {
+        readahead_size =
+            std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
+        TuneCompactionReadaheadSize(std::to_string(readahead_size),
+                                    change_points);
+      }
+      // 增加level0_file_num_compaction_trigger
+      uint64_t file_num_trigger =
+          current_opt_.level0_file_num_compaction_trigger;
+      if ((file_num_trigger + 1) < kLevel0FileNumCompactionTriggerUpper) {
+        file_num_trigger++;
+        TuneLevel0FileNumCompactionTrigger(std::to_string(file_num_trigger),
+                                           change_points);
+      }
+    }
+    // L0层阻塞
+    else if (vfs_->NumLevelFiles(0) > current_opt_.level0_stop_writes_trigger) {
+      // 增加max_background_compactions
+      if (current_opt_.max_background_compactions <
+          kMaxBackgroundCompactionsUpper) {
+        int new_compactions =
+            std::min<int>(kMaxBackgroundCompactionsUpper,
+                          current_opt_.max_background_compactions * 2);
+        TuneMaxBackGroundCompactions(std::to_string(new_compactions),
+                                     change_points);
+      }
+      // 增加compaction_readahead_size
+      uint64_t readahead_size = current_opt_.compaction_readahead_size;
+      if (readahead_size < kCompactionReadaheadSizeUpper) {
+        readahead_size =
+            std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
+        TuneCompactionReadaheadSize(std::to_string(readahead_size),
+                                    change_points);
+      }
+      // 增加level0_file_num_compaction_trigger
+      uint64_t file_num_trigger =
+          current_opt_.level0_file_num_compaction_trigger;
+      if ((file_num_trigger * 2) < kLevel0FileNumCompactionTriggerUpper) {
+        file_num_trigger *= 2;
+        TuneLevel0FileNumCompactionTrigger(std::to_string(file_num_trigger),
+                                           change_points);
+      }
+    }
+  }
+
   if (current_metric.read_write_ratio_ < 0.2) {
     TuneMaxBytesForLevelBase("67108864", change_points);
-  } else if (current_metric.read_write_ratio_ > 0.2 &&
-             current_metric.read_write_ratio_ < 0.8) {
+  } else if (current_metric.read_write_ratio_ >= 0.2 &&
+             current_metric.read_write_ratio_ < 0.7) {
     TuneMaxBytesForLevelBase("1073741824", change_points);
-  } else if (current_metric.read_write_ratio_ > 0.8) {
+  } else if (current_metric.read_write_ratio_ >= 0.7) {
     TuneMaxBytesForLevelBase("17179869184", change_points);
   }
 }

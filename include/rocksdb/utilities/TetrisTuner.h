@@ -118,7 +118,7 @@ class TetrisTuner {
   static constexpr uint64_t min_memtable_size = 64ull << 20;
   static constexpr double kMemUsageThresholdLower = 60;
   static constexpr double kMemUsageThresholdUpper = 80;
-  static constexpr double kReadWriteRatioThreshold = 0.2;
+  static constexpr double kReadWriteRatioThreshold = 0.5;
   static constexpr int kMaxWriteBufferNumberUpper = 4;
   static constexpr int kMaxWriteBufferNumberLower = 1;
   static constexpr uint64_t kWriteBufferSizeUpper = 1024 * 1024 * 1024;
