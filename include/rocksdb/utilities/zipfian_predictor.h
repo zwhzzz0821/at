@@ -115,12 +115,9 @@ static inline double PredictZipfian(
 
   std::vector<double> freq_list;
   freq_list.reserve(key_access_counts.size());
-  // uint64_t mx = 0;
   for (const auto& [str, count] : key_access_counts) {
     freq_list.emplace_back(static_cast<double>(count) / total_accesses);
-    // mx = std::max(mx, count);
   }
-  // std::cout << "count max is: " << mx << std::endl;
   std::sort(freq_list.begin(), freq_list.end(),
             [](const double& a, const double& b) -> bool { return a > b; });
 

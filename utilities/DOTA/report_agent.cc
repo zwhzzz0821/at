@@ -2,6 +2,8 @@
 // Created by jinghuan on 5/24/21.
 //
 
+#include "rocksdb/utilities/report_agent.h"
+
 #include <cassert>
 #include <mutex>
 
@@ -10,7 +12,6 @@
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
 #include "rocksdb/utilities/TetrisTuner.h"
-#include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/utilities/zipfian_predictor.h"
 #include "trace_replay/block_cache_tracer.h"
 
@@ -246,8 +247,13 @@ void ReporterAgentWithTuning::DetectAndTuning(int secs_elapsed) {
     last_metrics_collect_secs = secs_elapsed;
   }
   uint64_t tune_end_time = env_->NowMicros();
-  std::cout << "ADOC tune cost: " << tune_end_time - tune_start_time
-            << std::endl;
+  if (tune_time_log_ != nullptr) {
+    std::string report =
+        "ADOC tune cost: " + std::to_string(tune_end_time - tune_start_time) +
+        "\n";
+    tune_time_log_->Append(report);
+    tune_time_log_->Flush();
+  }
   if (tuning_points.empty() ||
       tuning_points.front().change_timing < secs_elapsed) {
     return;
