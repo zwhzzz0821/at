@@ -97,11 +97,11 @@ static inline double CalculateRSquared(const std::vector<double>& actual,
 
 // --- Main Function: predict_Zipfian ---
 
-static inline ZipfianPredictionResult PredictZipfian(
+static inline double PredictZipfian(
     const std::unordered_map<std::string, uint64_t>
         key_access_counts /*use copy to avoid data race*/) {
   if (key_access_counts.empty() || key_access_counts.size() == 1) {
-    return {0.0, 0.0, 0.0, -1.0};
+    return 0;
   }
   uint64_t total_accesses = std::accumulate(
       key_access_counts.begin(), key_access_counts.end(), 0LL,
@@ -110,67 +110,32 @@ static inline ZipfianPredictionResult PredictZipfian(
       });
   if (total_accesses == 0) {
     std::cerr << "Error: Total accesses cannot be zero." << std::endl;
-    return {0.0, 0.0, 0.0, -1.0};
+    return 0;
   }
 
   std::vector<double> freq_list;
   freq_list.reserve(key_access_counts.size());
+  // uint64_t mx = 0;
   for (const auto& [str, count] : key_access_counts) {
     freq_list.emplace_back(static_cast<double>(count) / total_accesses);
+    // mx = std::max(mx, count);
   }
-
+  // std::cout << "count max is: " << mx << std::endl;
   std::sort(freq_list.begin(), freq_list.end(),
             [](const double& a, const double& b) -> bool { return a > b; });
 
-  std::vector<double> log_freqs;
-  std::vector<double> log_ranks;
-
-  log_freqs.reserve(freq_list.size());
-  log_ranks.reserve(freq_list.size());
-
-  for (size_t i = 0; i < freq_list.size(); ++i) {
-    if (freq_list[i] <= 0) {
-      continue;
-    }
-    if (freq_list[i] < 0) {
-      std::cerr << "Error: Frequency cannot be negative or zero." << std::endl;
-      return {0.0, 0.0, 0.0, -1.0};
-    } else if (freq_list[i] == 0) {
-      log_freqs.push_back(-1e15);
-    } else {
-      log_freqs.push_back(std::log(freq_list[i]));
-    }
-    log_ranks.push_back(std::log(static_cast<double>(i + 1)));
-  }
-
-  if (log_ranks.size() < 2) {
-    std::cerr << "Error: Not enough valid data points for linear regression."
-              << std::endl;
-    return {0.0, 0.0, 0.0, -1.0};
-  }
-
-  LinearRegressionResult lr_result = LinearRegression(log_ranks, log_freqs);
-  double slope = lr_result.slope;
-  double intercept = lr_result.intercept;
-
-  std::vector<double> predicted_log_freqs;
-  predicted_log_freqs.reserve(log_ranks.size());
-  for (double lr : log_ranks) {
-    predicted_log_freqs.push_back(intercept + slope * lr);
-  }
-  double r_squared = CalculateRSquared(log_freqs, predicted_log_freqs);
-
   double zipfian_score = 0;
-
-  if (std::abs(slope - (-1.0)) < 0.2 && r_squared > 0.9) {
-    zipfian_score = 1.0;
-  } else if (std::abs(slope - (-1.0)) < 0.3 && r_squared > 0.7) {
-    zipfian_score = 0.5;
-  } else {
-    zipfian_score = 0.0;
+  double freq_sum = 0;
+  uint64_t all = freq_list.size();
+  for (size_t i = 0; i < freq_list.size(); i++) {
+    freq_sum += freq_list[i];
+    // freq_sum >= (all - i) / all
+    if (freq_sum * all >= (all - i)) {
+      zipfian_score = static_cast<double>(all - i) / all;
+      break;
+    }
   }
-
-  return {zipfian_score, slope, r_squared, -1.0};
+  return zipfian_score;
 }
 }  // namespace ROCKSDB_NAMESPACE
 

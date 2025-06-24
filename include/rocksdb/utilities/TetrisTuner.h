@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include "db/column_family.h"
@@ -13,7 +14,6 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
-#include "zipfian_predictor.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -29,14 +29,14 @@ struct TetrisMetrics {
   double read_write_ratio_;
   double io_intensity_;
   uint64_t compaction_granularity_;
-  double key_value_size_distribution_;               // not implemented yet
-  double cpu_usage_;                                 // %
-  double mem_usage_;                                 // %
-  double memtable_size_;                             // MB
-  uint64_t bloom_filter_size_;                       // MB
-  double seq_score_ = 0;                             // sequential score
-  double rw_ratio_score_ = 0;                        // read write ratio score
-  ZipfianPredictionResult zipfian_predictor_result;  // distribution score
+  double key_value_size_distribution_;  // not implemented yet
+  double cpu_usage_;                    // %
+  double mem_usage_;                    // %
+  double memtable_size_;                // MB
+  uint64_t bloom_filter_size_;          // MB
+  double seq_score_ = 0;                // sequential score
+  double rw_ratio_score_ = 0;           // read write ratio score
+  double zipfian_score_;                // distribution score
   uint64_t update_time_ = 0;
   std::string ToString() {
     return "TetrisMetrics: update_time=" + std::to_string(update_time_) + "," +
@@ -57,7 +57,7 @@ struct TetrisMetrics {
            "bloom_filter_size=" + std::to_string(bloom_filter_size_) + "," +
            "seq_score=" + std::to_string(seq_score_) + "," +
            "rw_ratio_score=" + std::to_string(rw_ratio_score_) + "," +
-           "zipfian_predictor_result=" + zipfian_predictor_result.ToString();
+           "zipfian_predictor_result=" + std::to_string(zipfian_score_);
   }
 };
 class TetrisTuner {
@@ -65,6 +65,11 @@ class TetrisTuner {
   TetrisTuner(DBImpl* db_ptr, Env* env) : db_ptr_(db_ptr), env_(env) {
     current_opt_ = db_ptr->GetOptions();
     last_tune_time_ = env_->NowMicros();
+    Status s =
+        env_->NewWritableFile("tune_option.log", &tune_log_file_, EnvOptions());
+    if (!s.ok()) {
+      std::cout << "打开tune_option.log失败: " << s.ToString() << std::endl;
+    }
   }
   TetrisTuner() = delete;
   ~TetrisTuner() = default;
@@ -73,6 +78,8 @@ class TetrisTuner {
                         LatencySpike& latency_spike);
 
  private:
+  void ReportTuneLine(LatencySpike latency_spike,
+                      std::vector<ChangePoint>& change_points);
   void UpdateCurrentOptions();
   void TuneWhenSmallSpike(const TetrisMetrics& current_metric,
                           std::vector<ChangePoint>& change_points);
@@ -110,7 +117,8 @@ class TetrisTuner {
   VersionStorageInfo* vfs_;
   ColumnFamilyData* cfd_;
   uint64_t last_tune_time_ = 0;
-  std::mutex mutex_;  // 使用普通互斥锁
+  std::unique_ptr<WritableFile> tune_log_file_;  // 调优日志文件
+  std::mutex mutex_;                             // 使用普通互斥锁
 
   static constexpr double kSeqThreshold = 0.7;
   static constexpr double kRandomThreshold = 0.4;

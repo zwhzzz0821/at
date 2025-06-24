@@ -2,15 +2,15 @@
 // Created by jinghuan on 5/24/21.
 //
 
-#include "rocksdb/utilities/report_agent.h"
-
 #include <cassert>
 #include <mutex>
 
+#include "rocksdb/env.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
 #include "rocksdb/utilities/TetrisTuner.h"
+#include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/utilities/zipfian_predictor.h"
 #include "trace_replay/block_cache_tracer.h"
 
@@ -127,9 +127,8 @@ void ReporterAgent::UpdateRwRatioScore(OperationType op_type, Slice* key,
 }
 
 void ReporterAgent::UpdateDistributionScore(Slice* key) {
-  // TODO
   std::string string_key = key->ToString();
-  if (key_distribution_map_.size() > 1000) {
+  if (key_distribution_map_.size() > 10000) {
     key_distribution_map_.clear();
   }
   key_distribution_map_[string_key]++;
@@ -190,15 +189,6 @@ void ReporterTetris::AutoTune() {
       last_latency_spike_ = latency_spike;
     }
   }
-  // test not change option
-  for (const auto& point : change_points) {
-    // 将输出改为写入文件
-    std::string log_line = "change point: " + point.ToString() + "\n";
-    if (tune_log_file_ != nullptr) {
-      tune_log_file_->Append(log_line);
-      tune_log_file_->Flush();
-    }
-  }
   ApplyChangePointsInstantly(&change_points);
 }
 
@@ -249,11 +239,15 @@ void ReporterAgentWithTuning::DetectChangesPoints(int sec_elapsed) {
 }
 
 void ReporterAgentWithTuning::DetectAndTuning(int secs_elapsed) {
+  uint64_t tune_start_time = env_->NowMicros();
   if (secs_elapsed % tuning_gap_secs_ == 0) {
     DetectChangesPoints(secs_elapsed);
     //    this->running_db_->immutable_db_options().job_stats->clear();
     last_metrics_collect_secs = secs_elapsed;
   }
+  uint64_t tune_end_time = env_->NowMicros();
+  std::cout << "ADOC tune cost: " << tune_end_time - tune_start_time
+            << std::endl;
   if (tuning_points.empty() ||
       tuning_points.front().change_timing < secs_elapsed) {
     return;

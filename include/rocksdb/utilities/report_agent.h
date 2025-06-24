@@ -23,6 +23,7 @@
 #include "db/db_impl/db_impl.h"
 #include "monitoring/histogram.h"
 #include "rocksdb/advanced_options.h"
+#include "rocksdb/env.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table_properties.h"
@@ -123,7 +124,9 @@ class ReporterAgent {
       mutex_.lock();
       total_key_num_ += 1;
       UpdateSeqScore(key);
-      UpdateRwRatioScore(op_type, key, value);
+      if (value != nullptr) {
+        UpdateRwRatioScore(op_type, key, value);
+      }
       UpdateDistributionScore(key);
       mutex_.unlock();
       // update latency for per op
@@ -397,7 +400,6 @@ class ReporterTetris : public ReporterAgent {
   uint64_t read_count_ = 0;
   uint64_t write_count_ = 0;
   std::unique_ptr<TetrisTuner> tuner_;
-  std::unique_ptr<WritableFile> tune_log_file_;  // 调优日志文件
   std::unique_ptr<WritableFile> metrics_file_;
   bool enable_tetris_ = false;
   bool applying_changes = false;
@@ -541,12 +543,8 @@ class ReporterTetris : public ReporterAgent {
 
     } else {
       db_ptr = reinterpret_cast<DBImpl*>(running_db);
-      Status s = env_->NewWritableFile("tune_option.log", &tune_log_file_,
-                                       EnvOptions());
-      if (!s.ok()) {
-        std::cout << "打开tune_option.log失败: " << s.ToString() << std::endl;
-      }
-      s = env_->NewWritableFile("metrics.log", &metrics_file_, EnvOptions());
+      Status s =
+          env_->NewWritableFile("metrics.log", &metrics_file_, EnvOptions());
       if (!s.ok()) {
         std::cout << "打开metrics.log失败: " << s.ToString() << std::endl;
       }
@@ -595,10 +593,10 @@ class ReporterTetris : public ReporterAgent {
     metrics.seq_score_ = current_metrics_.seq_score_;
     // rw ratio
     metrics.rw_ratio_score_ = current_metrics_.read_write_ratio_;
-    // zpifian
-    // mutex_.lock();
-    // metrics.zipfian_predictor_result = PredictZipfian(key_distribution_map_);
-    // mutex_.unlock();
+    // zipfian
+    mutex_.lock();
+    metrics.zipfian_score_ = PredictZipfian(key_distribution_map_);
+    mutex_.unlock();
     // finished
     current_metrics_ = std::move(metrics);
   }

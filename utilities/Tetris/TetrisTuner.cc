@@ -1,14 +1,36 @@
 //
 // create by yukimi on 2025/06/16
 //
-#include "rocksdb/utilities/TetrisTuner.h"
-
 #include <cstdint>
 #include <vector>
 
 #include "rocksdb/utilities/DOTA_tuner.h"
+#include "rocksdb/utilities/TetrisTuner.h"
 #include "trace_replay/block_cache_tracer.h"
 namespace ROCKSDB_NAMESPACE {
+
+std::string LatencySpikeToString(LatencySpike latency_spike) {
+  if (latency_spike == kSmallSpike) {
+    return "SmallSpike";
+  } else if (latency_spike == kBigSpike) {
+    return "BigSpike";
+  } else {
+    return "NoSpike";
+  }
+}
+
+void TetrisTuner::ReportTuneLine(LatencySpike latency_spike,
+                                 std::vector<ChangePoint>& change_points) {
+  std::string report_line =
+      "latency_spike:" + LatencySpikeToString(latency_spike) + ", ";
+  for (const auto& change_point : change_points) {
+    report_line += change_point.ToString() + ", ";
+  }
+  report_line += "\n";
+  tune_log_file_->Append(report_line);
+  tune_log_file_->Flush();
+}
+
 void TetrisTuner::AutoTuneByMetric(TetrisMetrics current_metric,
                                    std::vector<ChangePoint>& change_points,
                                    LatencySpike& latency_spike) {
@@ -26,6 +48,9 @@ void TetrisTuner::AutoTuneByMetric(TetrisMetrics current_metric,
   } else {
     // 没有延迟尖峰，性能稳定时，回到默认值
     ResetToDefault(change_points);
+  }
+  if (!change_points.empty()) {
+    ReportTuneLine(latency_spike, change_points);
   }
 }
 
