@@ -2199,7 +2199,11 @@ class Stats {
         hist_.insert({op_type, std::move(hist_temp)});
       }
       hist_[op_type]->Add(micros);
-
+      if (hist_.find(kAllOpLatency) == hist_.end()) {
+        auto hist_temp = std::make_shared<HistogramImpl>();
+        hist_.insert({kAllOpLatency, std::move(hist_temp)});
+      }
+      hist_[kAllOpLatency]->Add(micros);
       if (micros >= FLAGS_slow_usecs && !FLAGS_stats_interval) {
         fprintf(stderr, "long op: %" PRIu64 " micros%30s\r", micros, "");
         fflush(stderr);

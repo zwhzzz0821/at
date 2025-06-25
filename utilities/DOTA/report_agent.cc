@@ -4,9 +4,11 @@
 
 #include <cassert>
 #include <mutex>
+#include <string>
 
 #include "rocksdb/env.h"
 #include "rocksdb/slice.h"
+#include "rocksdb/statistics.h"
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
 #include "rocksdb/utilities/TetrisTuner.h"
@@ -429,14 +431,50 @@ ReporterAgentWithSILK::ReporterAgentWithSILK(DBImpl* running_db, Env* env,
 
 Status ReporterTetris::ReportLine(int secs_elapsed,
                                   int total_ops_done_snapshot) {
-  (void)secs_elapsed;
-  (void)total_ops_done_snapshot;
   // //TODO: append all metrics to the report file
-  // std::string report = std::to_string(secs_elapsed) + "," +
-  //                      std::to_string(total_ops_done_snapshot - last_report_)
-  //                      + "," + std::to_string(opt.write_buffer_size >> 20) +
-  //                      "," + std::to_string(opt.max_background_jobs);
-  // auto s = report_file_->Append(report);
+  int interval_read_operation = last_interval_read_count_;
+  int interval_write_operation = last_interval_write_count_;
+  int compaction_count =
+      static_cast<int>(cfd->internal_stats()->GetCompactionCount());
+  int interval_compaction_count = compaction_count - last_compaction_count_;
+  uint64_t flush_write_bytes =
+      cfd->ioptions()->stats->getTickerCount(FLUSH_WRITE_BYTES);
+  double avg_lantency = 0;
+  if (hist_->find(kAllOpLatency) != hist_->end()) {
+    const auto& hist = hist_->find(kAllOpLatency);
+    avg_lantency = hist->second->Percentile(50);
+  }
+  auto opt = this->db_ptr->GetOptions();
+
+  int l0_files = vfs->NumLevelFiles(0);
+  uint64_t total_mem_size = 0;
+  //    uint64_t active_mem = 0;
+  db_ptr->GetIntProperty("rocksdb.size-all-mem-tables", &total_mem_size);
+  //    db_ptr->GetIntProperty("rocksdb.cur-size-active-mem-table",
+  //    &active_mem);
+
+  uint64_t compaction_pending_bytes = vfs->estimated_compaction_needed_bytes();
+  uint64_t live_data_size = vfs->EstimateLiveDataSize();
+  uint64_t all_sst_size = 0;
+  int immutable_memtables = cfd->imm()->NumNotFlushed();
+  for (int i = 0; i < vfs->num_levels(); i++) {
+    all_sst_size += vfs->NumLevelBytes(i);
+  }
+
+  last_compaction_count_ = compaction_count;
+  std::string report =
+      std::to_string(secs_elapsed) + "," +
+      std::to_string(total_ops_done_snapshot - last_report_) + "," +
+      std::to_string(avg_lantency) + "," +
+      std::to_string(interval_write_operation) + "," +
+      std::to_string(interval_read_operation) + "," +
+      std::to_string(flush_write_bytes) + "," +
+      std::to_string(interval_compaction_count) + "," +
+      std::to_string(immutable_memtables) + "," +
+      std::to_string(total_mem_size) + "," + std::to_string(l0_files) + "," +
+      std::to_string(all_sst_size) + "," + std::to_string(live_data_size) +
+      "," + std::to_string(compaction_pending_bytes);
+  auto s = report_file_->Append(report);
   return Status::OK();
 }
 

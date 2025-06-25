@@ -59,6 +59,7 @@ enum OperationType : unsigned char {
   kUncompress,
   kCrc,
   kHash,
+  kAllOpLatency,
   kOthers
 };
 
@@ -97,7 +98,9 @@ class ReporterAgent {
         last_report_(0),
         report_interval_secs_(report_interval_secs),
         stop_(false) {
-    auto s = env_->NewWritableFile(fname, &report_file_, EnvOptions());
+    creat_time_ = env_->NowMicros();
+    std::string tmp_fname = "report_" + std::to_string(creat_time_) + ".csv";
+    auto s = env_->NewWritableFile(tmp_fname, &report_file_, EnvOptions());
 
     if (s.ok()) {
       s = report_file_->Append(header_string_ + "\n");
@@ -169,6 +172,7 @@ class ReporterAgent {
   bool stop_;
   TetrisMetrics current_metrics_;
   uint64_t time_started;
+  uint64_t creat_time_;
   static const uint64_t key_num_threshold_ = 1000;
   void SleepAndReport() {
     time_started = env_->NowMicros();
@@ -386,11 +390,13 @@ class ReporterTetris : public ReporterAgent {
  private:
   DBImpl* db_ptr;
   static std::string Tetris_header() {
-    return ReporterAgent::Header() + ",throughput" + ",P99 latency" +
-           ",P99.9 latency" + ",write amplification" + ",read/write ratio" +
-           ",IO intensity" + ",Seq/Random" + ",Zipfian/uniform" +
-           ",key-value size distribution" + ",CPU usage" + ",MEM usage" +
-           ",IO bandwidth" + ",memtable size" + ",bloom filter size";
+    return ReporterAgent::Header() + ",avg_lantency" +
+           ",interval_write_operation" + ",interval_read_operation" +
+           ",interval_flush_write_bytes" + ",interval_compaction_count" +
+           ",immutables" +
+           ",total_mem_size"
+           ",l0_fils" +
+           ",all_sst_size" + ",live_data_size" + ",pending_bytes";
   }
   Options current_opt;
 
@@ -404,6 +410,9 @@ class ReporterTetris : public ReporterAgent {
   bool enable_tetris_ = false;
   bool applying_changes = false;
   LatencySpike last_latency_spike_ = kNoSpike;
+  int last_interval_read_count_;
+  int last_interval_write_count_;
+  uint64_t last_compaction_count_;
 
   void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
   void DetectAndTuning(int secs_elapsed) override {
@@ -479,16 +488,16 @@ class ReporterTetris : public ReporterAgent {
     if (write_hist != hist_->end()) {
       write_count = write_hist->second->num();
     }
-    int last_interval_read_count = read_count - read_count_;
-    int last_interval_write_count = write_count - write_count_;
+    last_interval_read_count_ = read_count - read_count_;
+    last_interval_write_count_ = write_count - write_count_;
     read_count_ = read_count;
     write_count_ = write_count;
-    if (last_interval_write_count + last_interval_read_count == 0) {
+    if (last_interval_write_count_ + last_interval_read_count_ == 0) {
       return 0.0;  // avoid division by zero
     }
-    return static_cast<double>(last_interval_read_count) /
-           (last_interval_write_count +
-            last_interval_read_count);  // read/write ratio
+    return static_cast<double>(last_interval_read_count_) /
+           (last_interval_write_count_ +
+            last_interval_read_count_);  // read/write ratio
   }
   uint64_t GetFilterSize() {
     std::shared_ptr<const TableProperties> tp;
@@ -543,12 +552,12 @@ class ReporterTetris : public ReporterAgent {
 
     } else {
       db_ptr = reinterpret_cast<DBImpl*>(running_db);
-      Status s =
-          env_->NewWritableFile("metrics.log", &metrics_file_, EnvOptions());
+      std::string tmp_fname = "metrics_" + std::to_string(creat_time_) + ".log";
+      Status s = env_->NewWritableFile(tmp_fname, &metrics_file_, EnvOptions());
       if (!s.ok()) {
         std::cout << "打开metrics.log失败: " << s.ToString() << std::endl;
       }
-      tuner_ = std::make_unique<TetrisTuner>(running_db, env);
+      tuner_ = std::make_unique<TetrisTuner>(running_db, env, creat_time_);
     }
   }
   ~ReporterTetris() = default;

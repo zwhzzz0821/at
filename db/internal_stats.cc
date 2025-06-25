@@ -8,8 +8,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#include "db/internal_stats.h"
-
 #include <algorithm>
 #include <cinttypes>
 #include <cstddef>
@@ -23,6 +21,7 @@
 #include "cache/cache_entry_stats.h"
 #include "db/column_family.h"
 #include "db/db_impl/db_impl.h"
+#include "db/internal_stats.h"
 #include "port/port.h"
 #include "rocksdb/system_clock.h"
 #include "rocksdb/table.h"
@@ -676,6 +675,15 @@ double InternalStats::GetIOIntensity() {
   double io_intensity_ = levels_stats[-1][LevelStatType::READ_MBPS] +
                          levels_stats[-1][LevelStatType::WRITE_MBPS];
   return io_intensity_;
+}
+
+double InternalStats::GetCompactionCount() {
+  const VersionStorageInfo* vstorage = cfd_->current()->storage_info();
+  CompactionStats compaction_stats_sum;
+  std::map<int, std::map<LevelStatType, double>> levels_stats;
+  DumpCFMapStats(vstorage, &levels_stats, &compaction_stats_sum);
+  double compaction_count = levels_stats[-1][LevelStatType::COMP_COUNT];
+  return compaction_count;
 }
 
 // double InternalStats::GetCompactionTotalSize() {

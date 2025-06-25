@@ -62,11 +62,12 @@ struct TetrisMetrics {
 };
 class TetrisTuner {
  public:
-  TetrisTuner(DBImpl* db_ptr, Env* env) : db_ptr_(db_ptr), env_(env) {
+  TetrisTuner(DBImpl* db_ptr, Env* env, uint64_t create_time)
+      : db_ptr_(db_ptr), env_(env) {
     current_opt_ = db_ptr->GetOptions();
     last_tune_time_ = env_->NowMicros();
-    Status s =
-        env_->NewWritableFile("tune_option.log", &tune_log_file_, EnvOptions());
+    std::string fname = "tune_option_" + std::to_string(create_time) + ".log";
+    Status s = env_->NewWritableFile(fname, &tune_log_file_, EnvOptions());
     if (!s.ok()) {
       std::cout << "打开tune_option.log失败: " << s.ToString() << std::endl;
     }
