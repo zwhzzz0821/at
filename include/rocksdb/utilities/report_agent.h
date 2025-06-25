@@ -101,7 +101,12 @@ class ReporterAgent {
     creat_time_ = env_->NowMicros();
     std::string tmp_fname = "report_" + std::to_string(creat_time_) + ".csv";
     auto s = env_->NewWritableFile(tmp_fname, &report_file_, EnvOptions());
-
+    std::string tmp_fname_2 =
+        "tune_time_" + std::to_string(creat_time_) + ".log";
+    auto s2 = env_->NewWritableFile(tmp_fname_2, &tune_time_log_, EnvOptions());
+    if (!s2.ok()) {
+      std::cout << "Failed to open tune_time.log" << std::endl;
+    }
     if (s.ok()) {
       s = report_file_->Append(header_string_ + "\n");
       //      std::cout << "opened report file" << std::endl;
@@ -157,6 +162,7 @@ class ReporterAgent {
   uint64_t total_key_num_ = 0;
   std::string last_key_;
   std::unordered_map<std::string, uint64_t> key_distribution_map_;
+  std::unique_ptr<WritableFile> tune_time_log_;
   uint64_t sequnencial_key_num_ = 0;  // number of sequential keys
   uint64_t key_num_in_seq_ = 0;
   uint8_t seq_ascending_ =
@@ -416,12 +422,20 @@ class ReporterTetris : public ReporterAgent {
 
   void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
   void DetectAndTuning(int secs_elapsed) override {
+    uint64_t tune_start_time = env_->NowMicros();
     // This reporter does not support tuning now
     // just update the system info
     UpdateMetric(secs_elapsed);
     // detect lantency spike
     if (enable_tetris_) {
       AutoTune();
+    }
+    uint64_t tune_end_time = env_->NowMicros();
+    if (tune_time_log_ != nullptr) {
+      std::string report = "Tetris tune cost: " +
+                           std::to_string(tune_end_time - tune_start_time) +
+                           "\n";
+      tune_time_log_->Append(report);
     }
     // when test, dont print
     if (metrics_file_ != nullptr) {
