@@ -91,24 +91,36 @@ class ReporterAgent {
 
   ReporterAgent(Env* env, const std::string& fname,
                 uint64_t report_interval_secs,
-                std::string header_string = Header())
+                std::string header_string = Header(),
+                DBImpl* tmp_db_ptr = nullptr)
       : header_string_(header_string),
         env_(env),
         total_ops_done_(0),
         last_report_(0),
         report_interval_secs_(report_interval_secs),
         stop_(false) {
+    if (tmp_db_ptr != nullptr) {
+      db_ptr = reinterpret_cast<DBImpl*>(tmp_db_ptr);
+    }
+    header_string = ReporterAgent::Header() + ",avg_lantency" +
+                    ",interval_write_operation" + ",interval_read_operation" +
+                    ",interval_flush_write_bytes" +
+                    ",interval_compaction_count" + ",immutables" +
+                    ",total_mem_size"
+                    ",l0_fils" +
+                    ",all_sst_size" + ",live_data_size" + ",pending_bytes";
     creat_time_ = env_->NowMicros();
-    std::string tmp_fname = "report_" + std::to_string(creat_time_) + ".csv";
+    std::string tmp_fname =
+        "report_" + CastTimeStampToDateString(creat_time_) + ".csv";
     auto s = env_->NewWritableFile(tmp_fname, &report_file_, EnvOptions());
     std::string tmp_fname_2 =
-        "tune_time_" + std::to_string(creat_time_) + ".log";
+        "tune_time_" + CastTimeStampToDateString(creat_time_) + ".log";
     auto s2 = env_->NewWritableFile(tmp_fname_2, &tune_time_log_, EnvOptions());
     if (!s2.ok()) {
       std::cout << "Failed to open tune_time.log" << std::endl;
     }
     if (s.ok()) {
-      s = report_file_->Append(header_string_ + "\n");
+      s = report_file_->Append(header_string + "\n");
       //      std::cout << "opened report file" << std::endl;
     }
     if (s.ok()) {
@@ -179,7 +191,25 @@ class ReporterAgent {
   TetrisMetrics current_metrics_;
   uint64_t time_started;
   uint64_t creat_time_;
+  int last_interval_read_count_;
+  int last_interval_write_count_;
+  uint64_t last_compaction_count_;
   static const uint64_t key_num_threshold_ = 1000;
+  DBImpl* db_ptr;
+  Version* version;
+  Options current_opt;
+  ColumnFamilyData* cfd;
+  VersionStorageInfo* vfs;
+  uint64_t read_count_ = 0;
+  uint64_t write_count_ = 0;
+  void UpdateSystemInfo() {
+    assert(db_ptr != nullptr);
+    current_opt = db_ptr->GetOptions();
+    version =
+        db_ptr->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
+    cfd = version->cfd();
+    vfs = version->storage_info();
+  }
   void SleepAndReport() {
     time_started = env_->NowMicros();
     while (true) {
@@ -247,7 +277,13 @@ class ReporterAgentWithTuning : public ReporterAgent {
   std::map<std::string, void*> string_to_attributes_map;
   std::unique_ptr<DOTA_Tuner> tuner;
   static std::string DOTAHeader() {
-    return "secs_elapsed,interval_qps,batch_size,thread_num";
+    return ReporterAgent::Header() + ",avg_lantency" +
+           ",interval_write_operation" + ",interval_read_operation" +
+           ",interval_flush_write_bytes" + ",interval_compaction_count" +
+           ",immutables" +
+           ",total_mem_size"
+           ",l0_fils" +
+           ",all_sst_size" + ",live_data_size" + ",pending_bytes";
   }
   int tuning_gap_secs_;
   std::map<std::string, std::string> parameter_map;
@@ -328,10 +364,14 @@ class ReporterAgentWithTuning : public ReporterAgent {
 typedef ReporterAgent DOTAAgent;
 class ReporterWithMoreDetails : public ReporterAgent {
  private:
-  DBImpl* db_ptr;
   std::string detailed_header() {
-    return ReporterAgent::Header() + ",immutables" + ",total_mem_size" +
-           ",l0_files" + ",all_sst_size" + ",live_data_size" + ",pending_bytes";
+    return ReporterAgent::Header() + ",avg_lantency" +
+           ",interval_write_operation" + ",interval_read_operation" +
+           ",interval_flush_write_bytes" + ",interval_compaction_count" +
+           ",immutables" +
+           ",total_mem_size"
+           ",l0_fils" +
+           ",all_sst_size" + ",live_data_size" + ",pending_bytes";
   }
 
  public:
@@ -351,13 +391,36 @@ class ReporterWithMoreDetails : public ReporterAgent {
   void DetectAndTuning(int secs_elapsed) override;
 
   Status ReportLine(int secs_elapsed, int total_ops_done_snapshot) override {
+    UpdateSystemInfo();
+    auto read_hist = hist_->find(kRead);
+    auto write_hist = hist_->find(kWrite);
+    int read_count = 0;
+    int write_count = 0;
+    if (read_hist != hist_->end()) {
+      read_count = read_hist->second->num();
+    }
+    if (write_hist != hist_->end()) {
+      write_count = write_hist->second->num();
+    }
+    last_interval_read_count_ = read_count - read_count_;
+    last_interval_write_count_ = write_count - write_count_;
+    read_count_ = read_count;
+    write_count_ = write_count;
+
+    int interval_read_operation = last_interval_read_count_;
+    int interval_write_operation = last_interval_write_count_;
+    int compaction_count =
+        static_cast<int>(cfd->internal_stats()->GetCompactionCount());
+    int interval_compaction_count = compaction_count - last_compaction_count_;
+    uint64_t flush_write_bytes =
+        cfd->ioptions()->stats->getTickerCount(FLUSH_WRITE_BYTES);
+    double avg_lantency = 0;
+    if (hist_->find(kAllOpLatency) != hist_->end()) {
+      const auto& hist = hist_->find(kAllOpLatency);
+      avg_lantency = hist->second->Percentile(50);
+    }
     auto opt = this->db_ptr->GetOptions();
 
-    //    current_opt = db_ptr->GetOptions();
-    auto version =
-        db_ptr->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
-    auto cfd = version->cfd();
-    auto vfs = version->storage_info();
     int l0_files = vfs->NumLevelFiles(0);
     uint64_t total_mem_size = 0;
     //    uint64_t active_mem = 0;
@@ -374,14 +437,19 @@ class ReporterWithMoreDetails : public ReporterAgent {
       all_sst_size += vfs->NumLevelBytes(i);
     }
 
+    last_compaction_count_ = compaction_count;
     std::string report =
         std::to_string(secs_elapsed) + "," +
         std::to_string(total_ops_done_snapshot - last_report_) + "," +
+        std::to_string(avg_lantency) + "," +
+        std::to_string(interval_write_operation) + "," +
+        std::to_string(interval_read_operation) + "," +
+        std::to_string(flush_write_bytes) + "," +
+        std::to_string(interval_compaction_count) + "," +
         std::to_string(immutable_memtables) + "," +
         std::to_string(total_mem_size) + "," + std::to_string(l0_files) + "," +
         std::to_string(all_sst_size) + "," + std::to_string(live_data_size) +
         "," + std::to_string(compaction_pending_bytes);
-    //    std::cout << report << std::endl;
     auto s = report_file_->Append(report);
     return s;
   }
@@ -394,7 +462,6 @@ class ReporterWithMoreDetails : public ReporterAgent {
 
 class ReporterTetris : public ReporterAgent {
  private:
-  DBImpl* db_ptr;
   static std::string Tetris_header() {
     return ReporterAgent::Header() + ",avg_lantency" +
            ",interval_write_operation" + ",interval_read_operation" +
@@ -404,21 +471,11 @@ class ReporterTetris : public ReporterAgent {
            ",l0_fils" +
            ",all_sst_size" + ",live_data_size" + ",pending_bytes";
   }
-  Options current_opt;
-
-  Version* version;
-  ColumnFamilyData* cfd;
-  VersionStorageInfo* vfs;
-  uint64_t read_count_ = 0;
-  uint64_t write_count_ = 0;
   std::unique_ptr<TetrisTuner> tuner_;
   std::unique_ptr<WritableFile> metrics_file_;
   bool enable_tetris_ = false;
   bool applying_changes = false;
   LatencySpike last_latency_spike_ = kNoSpike;
-  int last_interval_read_count_;
-  int last_interval_write_count_;
-  uint64_t last_compaction_count_;
 
   void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
   void DetectAndTuning(int secs_elapsed) override {
@@ -442,15 +499,6 @@ class ReporterTetris : public ReporterAgent {
       metrics_file_->Append(current_metrics_.ToString() + "\n");
       metrics_file_->Flush();
     }
-  }
-
-  void UpdateSystemInfo() {
-    assert(db_ptr != nullptr);
-    current_opt = db_ptr->GetOptions();
-    version =
-        db_ptr->GetVersionSet()->GetColumnFamilySet()->GetDefault()->current();
-    cfd = version->cfd();
-    vfs = version->storage_info();
   }
 
   double GetReadLantency(double percentile = 50) {
@@ -566,7 +614,8 @@ class ReporterTetris : public ReporterAgent {
 
     } else {
       db_ptr = reinterpret_cast<DBImpl*>(running_db);
-      std::string tmp_fname = "metrics_" + std::to_string(creat_time_) + ".log";
+      std::string tmp_fname =
+          "metrics_" + CastTimeStampToDateString(creat_time_) + ".log";
       Status s = env_->NewWritableFile(tmp_fname, &metrics_file_, EnvOptions());
       if (!s.ok()) {
         std::cout << "打开metrics.log失败: " << s.ToString() << std::endl;

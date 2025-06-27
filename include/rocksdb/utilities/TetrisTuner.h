@@ -5,6 +5,7 @@
 #define TETRIS_TUNER_H
 
 #include <cstdint>
+#include <iomanip>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -16,6 +17,21 @@
 #include "rocksdb/utilities/DOTA_tuner.h"
 
 namespace ROCKSDB_NAMESPACE {
+
+static std::string CastTimeStampToDateString(uint64_t time_stamp) {
+  std::time_t t = static_cast<std::time_t>(time_stamp / 1000000);
+  std::tm tm_time;
+
+#if defined(_WIN32) || defined(_WIN64)
+  localtime_s(&tm_time, &t);
+#else
+  localtime_r(&t, &tm_time);
+#endif
+
+  std::ostringstream oss;
+  oss << std::put_time(&tm_time, "%Y_%m_%d_%H:%M:%S");
+  return oss.str();
+}
 
 enum LatencySpike : uint8_t { kNoSpike = 0, kSmallSpike, kBigSpike };
 
@@ -66,7 +82,8 @@ class TetrisTuner {
       : db_ptr_(db_ptr), env_(env) {
     current_opt_ = db_ptr->GetOptions();
     last_tune_time_ = env_->NowMicros();
-    std::string fname = "tune_option_" + std::to_string(create_time) + ".log";
+    std::string fname =
+        "tune_option_" + CastTimeStampToDateString(create_time) + ".log";
     Status s = env_->NewWritableFile(fname, &tune_log_file_, EnvOptions());
     if (!s.ok()) {
       std::cout << "打开tune_option.log失败: " << s.ToString() << std::endl;

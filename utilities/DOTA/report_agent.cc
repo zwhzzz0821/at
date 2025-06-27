@@ -54,8 +54,64 @@ Status update_cf_options(
 void ReporterAgent::DetectAndTuning(int /*secs_elapsed*/) {}
 Status ReporterAgent::ReportLine(int secs_elapsed,
                                  int total_ops_done_snapshot) {
-  std::string report = std::to_string(secs_elapsed) + "," +
-                       std::to_string(total_ops_done_snapshot - last_report_);
+  UpdateSystemInfo();
+  auto read_hist = hist_->find(kRead);
+  auto write_hist = hist_->find(kWrite);
+  int read_count = 0;
+  int write_count = 0;
+  if (read_hist != hist_->end()) {
+    read_count = read_hist->second->num();
+  }
+  if (write_hist != hist_->end()) {
+    write_count = write_hist->second->num();
+  }
+  last_interval_read_count_ = read_count - read_count_;
+  last_interval_write_count_ = write_count - write_count_;
+  read_count_ = read_count;
+  write_count_ = write_count;
+
+  int interval_read_operation = last_interval_read_count_;
+  int interval_write_operation = last_interval_write_count_;
+  int compaction_count =
+      static_cast<int>(cfd->internal_stats()->GetCompactionCount());
+  int interval_compaction_count = compaction_count - last_compaction_count_;
+  uint64_t flush_write_bytes =
+      cfd->ioptions()->stats->getTickerCount(FLUSH_WRITE_BYTES);
+  double avg_lantency = 0;
+  if (hist_->find(kAllOpLatency) != hist_->end()) {
+    const auto& hist = hist_->find(kAllOpLatency);
+    avg_lantency = hist->second->Percentile(50);
+  }
+  auto opt = this->db_ptr->GetOptions();
+
+  int l0_files = vfs->NumLevelFiles(0);
+  uint64_t total_mem_size = 0;
+  //    uint64_t active_mem = 0;
+  db_ptr->GetIntProperty("rocksdb.size-all-mem-tables", &total_mem_size);
+  //    db_ptr->GetIntProperty("rocksdb.cur-size-active-mem-table",
+  //    &active_mem);
+
+  uint64_t compaction_pending_bytes = vfs->estimated_compaction_needed_bytes();
+  uint64_t live_data_size = vfs->EstimateLiveDataSize();
+  uint64_t all_sst_size = 0;
+  int immutable_memtables = cfd->imm()->NumNotFlushed();
+  for (int i = 0; i < vfs->num_levels(); i++) {
+    all_sst_size += vfs->NumLevelBytes(i);
+  }
+
+  last_compaction_count_ = compaction_count;
+  std::string report =
+      std::to_string(secs_elapsed) + "," +
+      std::to_string(total_ops_done_snapshot - last_report_) + "," +
+      std::to_string(avg_lantency) + "," +
+      std::to_string(interval_write_operation) + "," +
+      std::to_string(interval_read_operation) + "," +
+      std::to_string(flush_write_bytes) + "," +
+      std::to_string(interval_compaction_count) + "," +
+      std::to_string(immutable_memtables) + "," +
+      std::to_string(total_mem_size) + "," + std::to_string(l0_files) + "," +
+      std::to_string(all_sst_size) + "," + std::to_string(live_data_size) +
+      "," + std::to_string(compaction_pending_bytes);
   auto s = report_file_->Append(report);
   return s;
 }
@@ -266,12 +322,64 @@ void ReporterAgentWithTuning::DetectAndTuning(int secs_elapsed) {
 
 Status ReporterAgentWithTuning::ReportLine(int secs_elapsed,
                                            int total_ops_done_snapshot) {
-  auto opt = this->running_db_->GetOptions();
+  UpdateSystemInfo();
+  auto read_hist = hist_->find(kRead);
+  auto write_hist = hist_->find(kWrite);
+  int read_count = 0;
+  int write_count = 0;
+  if (read_hist != hist_->end()) {
+    read_count = read_hist->second->num();
+  }
+  if (write_hist != hist_->end()) {
+    write_count = write_hist->second->num();
+  }
+  last_interval_read_count_ = read_count - read_count_;
+  last_interval_write_count_ = write_count - write_count_;
+  read_count_ = read_count;
+  write_count_ = write_count;
 
-  std::string report = std::to_string(secs_elapsed) + "," +
-                       std::to_string(total_ops_done_snapshot - last_report_) +
-                       "," + std::to_string(opt.write_buffer_size >> 20) + "," +
-                       std::to_string(opt.max_background_jobs);
+  int interval_read_operation = last_interval_read_count_;
+  int interval_write_operation = last_interval_write_count_;
+  int compaction_count =
+      static_cast<int>(cfd->internal_stats()->GetCompactionCount());
+  int interval_compaction_count = compaction_count - last_compaction_count_;
+  uint64_t flush_write_bytes =
+      cfd->ioptions()->stats->getTickerCount(FLUSH_WRITE_BYTES);
+  double avg_lantency = 0;
+  if (hist_->find(kAllOpLatency) != hist_->end()) {
+    const auto& hist = hist_->find(kAllOpLatency);
+    avg_lantency = hist->second->Percentile(50);
+  }
+  auto opt = this->db_ptr->GetOptions();
+
+  int l0_files = vfs->NumLevelFiles(0);
+  uint64_t total_mem_size = 0;
+  //    uint64_t active_mem = 0;
+  db_ptr->GetIntProperty("rocksdb.size-all-mem-tables", &total_mem_size);
+  //    db_ptr->GetIntProperty("rocksdb.cur-size-active-mem-table",
+  //    &active_mem);
+
+  uint64_t compaction_pending_bytes = vfs->estimated_compaction_needed_bytes();
+  uint64_t live_data_size = vfs->EstimateLiveDataSize();
+  uint64_t all_sst_size = 0;
+  int immutable_memtables = cfd->imm()->NumNotFlushed();
+  for (int i = 0; i < vfs->num_levels(); i++) {
+    all_sst_size += vfs->NumLevelBytes(i);
+  }
+
+  last_compaction_count_ = compaction_count;
+  std::string report =
+      std::to_string(secs_elapsed) + "," +
+      std::to_string(total_ops_done_snapshot - last_report_) + "," +
+      std::to_string(avg_lantency) + "," +
+      std::to_string(interval_write_operation) + "," +
+      std::to_string(interval_read_operation) + "," +
+      std::to_string(flush_write_bytes) + "," +
+      std::to_string(interval_compaction_count) + "," +
+      std::to_string(immutable_memtables) + "," +
+      std::to_string(total_mem_size) + "," + std::to_string(l0_files) + "," +
+      std::to_string(all_sst_size) + "," + std::to_string(live_data_size) +
+      "," + std::to_string(compaction_pending_bytes);
   auto s = report_file_->Append(report);
   return s;
 }
@@ -340,6 +448,7 @@ ReporterAgentWithTuning::ReporterAgentWithTuning(DBImpl* running_db, Env* env,
     std::cout << "Missing parameter db_ to apply changes" << std::endl;
     abort();
   } else {
+    db_ptr = reinterpret_cast<DBImpl*>(running_db);
     running_db_ = running_db;
   }
   this->tuning_gap_secs_ = std::max(dota_tuning_gap_secs, report_interval_secs);
@@ -438,6 +547,7 @@ ReporterAgentWithSILK::ReporterAgentWithSILK(DBImpl* running_db, Env* env,
 Status ReporterTetris::ReportLine(int secs_elapsed,
                                   int total_ops_done_snapshot) {
   // //TODO: append all metrics to the report file
+  UpdateSystemInfo();
   int interval_read_operation = last_interval_read_count_;
   int interval_write_operation = last_interval_write_count_;
   int compaction_count =

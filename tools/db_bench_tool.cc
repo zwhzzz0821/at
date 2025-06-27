@@ -3890,7 +3890,8 @@ class Benchmark {
               FLAGS_SILK_bandwidth_limitation));
         } else {
           reporter_agent.reset(new ReporterAgent(
-              FLAGS_env, FLAGS_report_file, FLAGS_report_interval_seconds));
+              FLAGS_env, FLAGS_report_file, FLAGS_report_interval_seconds,
+              ReporterAgent::Header(), reinterpret_cast<DBImpl*>(db_.db)));
         }
       }
     }

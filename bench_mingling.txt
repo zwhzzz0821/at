@@ -1,10 +1,13 @@
 ./db_bench \
   --benchmarks=fillrandom \
-  --num=10000000 \
+  --num=1000000 \
   --key_size=16 \
   --use_existing_db=0 \
   --value_size=100 \
   --statistics=true \
   --histogram=true \
+  --Tetris_enable=true \
+  --TEA_enable=false \
+  --FEA_enable=false \
   --compression_type=none \
-  --db=../tmp/db  > ../test_data_dir/tune.log
+  --db=/home/zwh/lib/at/tmp/db  > /home/zwh/lib/at/test_data_dir/tune.log
