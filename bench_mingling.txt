@@ -10,4 +10,5 @@
   --TEA_enable=false \
   --FEA_enable=false \
   --compression_type=none \
+  --report_interval_seconds=1 \
   --db=/home/zwh/lib/at/tmp/db  > /home/zwh/lib/at/test_data_dir/tune.log

@@ -305,7 +305,8 @@ class ReporterAgentWithTuning : public ReporterAgent {
   DOTA_Tuner* GetTuner() { return tuner.get(); }
   void ApplyChangePointsInstantly(std::vector<ChangePoint>* points);
 
-  void DetectChangesPoints(int sec_elapsed);
+  void DetectChangesPoints(int sec_elapsed,
+                           std::unique_ptr<WritableFile>& tune_time_log);
 
   void PopChangePoints(int secs_elapsed);
 
@@ -485,14 +486,7 @@ class ReporterTetris : public ReporterAgent {
     UpdateMetric(secs_elapsed);
     // detect lantency spike
     if (enable_tetris_) {
-      AutoTune();
-    }
-    uint64_t tune_end_time = env_->NowMicros();
-    if (tune_time_log_ != nullptr) {
-      std::string report = "Tetris tune cost: " +
-                           std::to_string(tune_end_time - tune_start_time) +
-                           "\n";
-      tune_time_log_->Append(report);
+      AutoTune(tune_time_log_, tune_start_time);
     }
     // when test, dont print
     if (metrics_file_ != nullptr) {
@@ -601,7 +595,8 @@ class ReporterTetris : public ReporterAgent {
   /*
    * Auto tune the system
    */
-  void AutoTune();
+  void AutoTune(std::unique_ptr<WritableFile>& tune_time_log,
+                uint64_t start_tune_time);
 
  public:
   ReporterTetris(DBImpl* running_db, Env* env, const std::string& fname,

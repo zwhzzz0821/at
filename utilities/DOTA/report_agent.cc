@@ -235,7 +235,8 @@ LatencySpike ReporterTetris::DetectLatencySpike() {
   return kNoSpike;
 }
 
-void ReporterTetris::AutoTune() {
+void ReporterTetris::AutoTune(std::unique_ptr<WritableFile>& tune_time_log,
+                              uint64_t start_tune_time) {
   LatencySpike latency_spike = DetectLatencySpike();
   // TODO: auto tune the system
   std::vector<ChangePoint> change_points;
@@ -249,6 +250,17 @@ void ReporterTetris::AutoTune() {
     }
   }
   ApplyChangePointsInstantly(&change_points);
+  uint64_t tune_end_time = env_->NowMicros();
+  if (tune_time_log != nullptr) {
+    std::string report =
+        "Tetris tune cost: " + std::to_string(tune_end_time - start_tune_time);
+    for (const auto& point : change_points) {
+      report += " " + point.opt + " : " + point.value;
+    }
+    report += "\n";
+    tune_time_log->Append(report);
+    tune_time_log->Flush();
+  }
 }
 
 void ReporterTetris::ApplyChangePointsInstantly(
@@ -269,7 +281,6 @@ void ReporterTetris::ApplyChangePointsInstantly(
       new_cf_options->emplace(point.opt, point.value);
     }
   }
-  points->clear();
   Status s;
   if (!new_db_options->empty()) {
     //    std::thread t();
@@ -288,29 +299,34 @@ const TetrisMetrics& ReporterAgent::GetMetrics() const {
   return current_metrics_;
 }
 
-void ReporterAgentWithTuning::DetectChangesPoints(int sec_elapsed) {
+void ReporterAgentWithTuning::DetectChangesPoints(
+    int sec_elapsed, std::unique_ptr<WritableFile>& tune_time_log) {
+  uint64_t tune_start_time = env_->NowMicros();
   std::vector<ChangePoint> change_points;
   if (applying_changes) {
     return;
   }
   tuner->DetectTuningOperations(sec_elapsed, &change_points);
+  std::cout << "change points size: " << change_points.size() << std::endl;
   ApplyChangePointsInstantly(&change_points);
+  uint64_t tune_end_time = env_->NowMicros();
+  if (tune_time_log != nullptr) {
+    std::string report =
+        "ADOC tune cost: " + std::to_string(tune_end_time - tune_start_time);
+    for (const auto& point : change_points) {
+      report += " " + point.opt + " : " + point.value;
+    }
+    report += "\n";
+    tune_time_log->Append(report);
+    tune_time_log->Flush();
+  }
 }
 
 void ReporterAgentWithTuning::DetectAndTuning(int secs_elapsed) {
-  uint64_t tune_start_time = env_->NowMicros();
   if (secs_elapsed % tuning_gap_secs_ == 0) {
-    DetectChangesPoints(secs_elapsed);
+    DetectChangesPoints(secs_elapsed, tune_time_log_);
     //    this->running_db_->immutable_db_options().job_stats->clear();
     last_metrics_collect_secs = secs_elapsed;
-  }
-  uint64_t tune_end_time = env_->NowMicros();
-  if (tune_time_log_ != nullptr) {
-    std::string report =
-        "ADOC tune cost: " + std::to_string(tune_end_time - tune_start_time) +
-        "\n";
-    tune_time_log_->Append(report);
-    tune_time_log_->Flush();
   }
   if (tuning_points.empty() ||
       tuning_points.front().change_timing < secs_elapsed) {
@@ -420,7 +436,6 @@ void ReporterAgentWithTuning::ApplyChangePointsInstantly(
       new_cf_options->emplace(point.opt, point.value);
     }
   }
-  points->clear();
   Status s;
   if (!new_db_options->empty()) {
     //    std::thread t();
