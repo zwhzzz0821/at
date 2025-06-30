@@ -183,8 +183,8 @@ class ReporterAgent {
   uint64_t write_opt_size_sum_ = 0;
   std::vector<uint64_t> op_latency_list_;  // sliding window of window_size_ ops
   static constexpr uint64_t window_size_ = 100;
-  static constexpr double kSmallSpikeThreshold = 2;
-  static constexpr double kBigSpikeThreshold = 4;
+  static constexpr double kSmallSpikeThreshold = 1;
+  static constexpr double kBigSpikeThreshold = 2;
   std::condition_variable stop_cv_;
   HistogramMapPtr hist_;
   bool stop_;
