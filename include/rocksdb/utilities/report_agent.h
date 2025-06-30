@@ -474,6 +474,7 @@ class ReporterTetris : public ReporterAgent {
   }
   std::unique_ptr<TetrisTuner> tuner_;
   std::unique_ptr<WritableFile> metrics_file_;
+  std::unique_ptr<WritableFile> z_score_file_;
   bool enable_tetris_ = false;
   bool applying_changes = false;
   LatencySpike last_latency_spike_ = kNoSpike;
@@ -614,6 +615,11 @@ class ReporterTetris : public ReporterAgent {
       Status s = env_->NewWritableFile(tmp_fname, &metrics_file_, EnvOptions());
       if (!s.ok()) {
         std::cout << "打开metrics.log失败: " << s.ToString() << std::endl;
+      }
+      tmp_fname = "z_score_" + CastTimeStampToDateString(creat_time_) + ".log";
+      s = env_->NewWritableFile(tmp_fname, &z_score_file_, EnvOptions());
+      if (!s.ok()) {
+        std::cout << "打开z_score.log失败: " << s.ToString() << std::endl;
       }
       tuner_ = std::make_unique<TetrisTuner>(running_db, env, creat_time_);
     }

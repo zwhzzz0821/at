@@ -2,8 +2,6 @@
 // Created by jinghuan on 5/24/21.
 //
 
-#include "rocksdb/utilities/report_agent.h"
-
 #include <cassert>
 #include <mutex>
 #include <string>
@@ -14,6 +12,7 @@
 #include "rocksdb/status.h"
 #include "rocksdb/utilities/DOTA_tuner.h"
 #include "rocksdb/utilities/TetrisTuner.h"
+#include "rocksdb/utilities/report_agent.h"
 #include "rocksdb/utilities/zipfian_predictor.h"
 #include "trace_replay/block_cache_tracer.h"
 
@@ -223,6 +222,9 @@ LatencySpike ReporterTetris::DetectLatencySpike() {
   double z_score =
       (std_latency != 0 ? (op_latency_list_.back() - avg_latency) / std_latency
                         : 0);
+  z_score_file_->Append("time: " + std::to_string(env_->NowMicros()) +
+                        ", zscore: " + std::to_string(z_score) + "\n");
+  z_score_file_->Flush();
   if (abs(z_score) > kSmallSpikeThreshold ||
       op_latency_list_.back() > 1e6) {  // 1s
     std::cout << "detect small spike" << std::endl;
