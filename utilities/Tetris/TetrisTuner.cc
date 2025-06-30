@@ -1,6 +1,7 @@
 //
 // create by yukimi on 2025/06/16
 //
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -76,25 +77,17 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
     // TuneMinWriteBufferNumberToMerge("1", change_points);
     // 增加write_buffer_size
     uint64_t write_buffer_size = current_opt_.write_buffer_size;
-    if ((write_buffer_size + kWriteBufferSizePlusFactor) <=
-        kWriteBufferSizeUpper) {
-      write_buffer_size =
-          std::min(write_buffer_size + kWriteBufferSizePlusFactor,
-                   kWriteBufferSizeUpper);
-      TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
-    }
+    write_buffer_size = std::min(write_buffer_size + kWriteBufferSizePlusFactor,
+                                 kWriteBufferSizeUpper);
+    TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
   } else {
     // 随机写入场景，合并memtable
     // TuneMinWriteBufferNumberToMerge("2", change_points);
     // 增加write_buffer_size
     uint64_t write_buffer_size = current_opt_.write_buffer_size;
-    if ((write_buffer_size - kWriteBufferSizeMinusFactor) >=
-        kWriteBufferSizeLower) {
-      write_buffer_size =
-          std::min(write_buffer_size - kWriteBufferSizeMinusFactor,
-                   kWriteBufferSizeUpper);
-      TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
-    }
+    write_buffer_size = std::max(
+        write_buffer_size - kWriteBufferSizeMinusFactor, kWriteBufferSizeLower);
+    TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
   }
   // }
   /////////////////////////////////////////////////////////////////////////
@@ -189,11 +182,10 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
     else if (vfs_->NumLevelFiles(0) >=
              current_opt_.level0_stop_writes_trigger) {
       // 增加max_background_jobs
-      if ((current_opt_.max_background_jobs * 2) <= kMaxBackgroundJobsUpper) {
-        TuneMaxBackgroundJobs(
-            std::to_string(current_opt_.max_background_jobs * 2),
-            change_points);
-      }
+      TuneMaxBackgroundJobs(
+          std::to_string(std::min(current_opt_.max_background_jobs * 2,
+                                  kMaxBackgroundJobsUpper)),
+          change_points);
     }
   } else {
     // 低内存压力
@@ -209,16 +201,14 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
       }
       // 增加compaction_readahead_size
       uint64_t readahead_size = current_opt_.compaction_readahead_size;
-      if (readahead_size < kCompactionReadaheadSizeUpper) {
-        readahead_size =
-            std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
-        TuneCompactionReadaheadSize(std::to_string(readahead_size),
-                                    change_points);
-      }
+      readahead_size =
+          std::min(readahead_size * 2, kCompactionReadaheadSizeUpper);
+      TuneCompactionReadaheadSize(std::to_string(readahead_size),
+                                  change_points);
       // 增加level0_file_num_compaction_trigger
       uint64_t file_num_trigger =
           current_opt_.level0_file_num_compaction_trigger;
-      if ((file_num_trigger + 1) < kLevel0FileNumCompactionTriggerUpper) {
+      if ((file_num_trigger + 1) <= kLevel0FileNumCompactionTriggerUpper) {
         file_num_trigger++;
         TuneLevel0FileNumCompactionTrigger(std::to_string(file_num_trigger),
                                            change_points);
@@ -246,11 +236,10 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
       // 增加level0_file_num_compaction_trigger
       uint64_t file_num_trigger =
           current_opt_.level0_file_num_compaction_trigger;
-      if ((file_num_trigger * 2) < kLevel0FileNumCompactionTriggerUpper) {
-        file_num_trigger *= 2;
-        TuneLevel0FileNumCompactionTrigger(std::to_string(file_num_trigger),
-                                           change_points);
-      }
+      file_num_trigger =
+          std::min(file_num_trigger * 2, kLevel0FileNumCompactionTriggerUpper);
+      TuneLevel0FileNumCompactionTrigger(std::to_string(file_num_trigger),
+                                         change_points);
     }
   }
 
