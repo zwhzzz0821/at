@@ -160,6 +160,7 @@ class TetrisTuner {
   static constexpr uint64_t kCompactionGranularityThreshold = 500;
   static constexpr uint64_t kLevel0FileNumCompactionTriggerLower = 2;
   static constexpr uint64_t kLevel0FileNumCompactionTriggerUpper = 10;
+  static constexpr double kZipfianThreshold = 0.8;
 
   // 默认参数值
   static constexpr uint64_t kDefaultWriteBufferSize = 67108864;  // 64MB

@@ -89,6 +89,14 @@ void TetrisTuner::TuneWhenSmallSpike(const TetrisMetrics& current_metric,
         write_buffer_size - kWriteBufferSizeMinusFactor, kWriteBufferSizeLower);
     TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
   }
+
+  if (current_metric.zipfian_score_ >= kZipfianThreshold) {  // 暂时和random一样
+    // Zipfian分布场景，增加memtable大小
+    uint64_t write_buffer_size = current_opt_.write_buffer_size;
+    write_buffer_size = std::max(
+        write_buffer_size - kWriteBufferSizeMinusFactor, kWriteBufferSizeLower);
+    TuneWriteBufferSize(std::to_string(write_buffer_size), change_points);
+  }
   // }
   /////////////////////////////////////////////////////////////////////////
   // LSM调整，负载模式变化调整
